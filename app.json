@@ -3,6 +3,7 @@
     "name": "RestoHub",
     "slug": "RestoHub",
     "version": "1.0.0",
+    "scheme": "restohub",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",

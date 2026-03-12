@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Restaurant, Collection } from '../types';
+import { Restaurant, Collection, RestaurantCategory } from '../types';
+import { CATEGORIES } from '../constants/categories';
 
 const RESTAURANTS_KEY = '@restohub_restaurants';
 const COLLECTIONS_KEY = '@restohub_collections';
@@ -90,4 +91,95 @@ export async function removeRestaurantFromCollection(
     col.restaurantIds = col.restaurantIds.filter((id) => id !== restaurantId);
     await AsyncStorage.setItem(COLLECTIONS_KEY, JSON.stringify(collections));
   }
+}
+
+export async function importSharedCollection(data: any): Promise<string> {
+  // Handle Version 3 (Array), Version 2 (Minified Object), and Version 1 (Standard Object)
+  let collection: Collection;
+  let restaurants: Restaurant[];
+
+  if (Array.isArray(data) && data[0] === 3) {
+    // Version 3: [3, userName, [name, emoji, desc], [[rName, rCatIdx, rDesc, rAdd, pL, pMin, pMax, [lat, lng]], ...]]
+    const catKeys = Object.keys(CATEGORIES);
+    const [, , colArr, restoArr] = data;
+    
+    collection = {
+      id: '',
+      name: colArr[0],
+      emoji: colArr[1],
+      description: colArr[2],
+      restaurantIds: [],
+      createdAt: new Date().toISOString()
+    };
+
+    restaurants = (restoArr as any[]).map(r => ({
+      id: `rest_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+      name: r[0],
+      category: catKeys[r[1]] as RestaurantCategory || 'restaurant',
+      description: r[2],
+      address: r[3],
+      priceLevel: r[4],
+      priceMin: r[5],
+      priceMax: r[6],
+      location: r[7] ? { latitude: r[7][0], longitude: r[7][1] } : undefined,
+      images: [],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    }) as Restaurant);
+  } else {
+    // Version 2/1 logic (Fallback)
+    collection = data.collection || {
+      id: '',
+      name: data.c?.n || 'Sans titre',
+      emoji: data.c?.e || 'Folder',
+      description: data.c?.d || '',
+      restaurantIds: [],
+      createdAt: new Date().toISOString()
+    };
+
+    const rawRestos: any[] = data.restaurants || data.r || [];
+    restaurants = rawRestos.map(r => {
+      if (r.id) return r; // Version 1
+      return {
+        id: `rest_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+        name: r.n || 'Sans nom',
+        category: r.c || 'restaurant',
+        description: r.d || '',
+        address: r.a || '',
+        priceLevel: r.pl,
+        priceMin: r.pm,
+        priceMax: r.px,
+        location: r.l,
+        images: [],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      } as Restaurant;
+    });
+  }
+  
+  // 1. Save all restaurants
+  const existingRestos = await getRestaurants();
+  const newRestaurantIds: string[] = [];
+
+  for (const newResto of restaurants) {
+    // Generate new ID for all shared restaurants to avoid collisions and allow importing the same restaurant multiple times if needed
+    // or we can match by name+address. Let's keep it simple: new IDs.
+    const finalResto = { ...newResto, id: `rest_${Date.now()}_${Math.random().toString(36).substr(2, 9)}` };
+    existingRestos.unshift(finalResto);
+    newRestaurantIds.push(finalResto.id);
+  }
+  await AsyncStorage.setItem(RESTAURANTS_KEY, JSON.stringify(existingRestos));
+
+  // 2. Save the collection
+  const existingCols = await getCollections();
+  const newCol: Collection = {
+    ...collection,
+    id: `shared_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+    restaurantIds: newRestaurantIds,
+    createdAt: new Date().toISOString()
+  };
+  existingCols.unshift(newCol);
+  await AsyncStorage.setItem(COLLECTIONS_KEY, JSON.stringify(existingCols));
+
+  return newCol.id;
 }

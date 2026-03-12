@@ -10,11 +10,16 @@ import {
 import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { Search, Plus, LibraryBig, Folder } from 'lucide-react-native';
+import { Search, Plus, LibraryBig, Folder, Download } from 'lucide-react-native';
 import { BlurView } from 'expo-blur';
+import * as Clipboard from 'expo-clipboard';
+import { decode } from 'base-64';
+import { Alert } from 'react-native';
+import * as Linking from 'expo-linking';
+import LZString from 'lz-string';
 
 import { Collection, CollectionsStackParamList } from '../types';
-import { getCollections, saveCollection } from '../storage/storage';
+import { getCollections, saveCollection, importSharedCollection } from '../storage/storage';
 import CollectionFormModal from '../components/CollectionFormModal';
 import EmptyState from '../components/EmptyState';
 import { useTheme } from '../theme/ThemeProvider';
@@ -91,6 +96,70 @@ export default function CollectionsListScreen({ navigation }: Props) {
     setModalVisible(true);
   };
 
+  const handleManualImport = async () => {
+    try {
+      const text = await Clipboard.getStringAsync();
+      if (!text) {
+        Alert.alert('Presse-papier vide', 'Copiez un lien de partage ou le code de collection d\'abord.');
+        return;
+      }
+
+      let sharedData;
+      if (text.includes('s=')) {
+        const { queryParams } = Linking.parse(text);
+        const json = LZString.decompressFromEncodedURIComponent(queryParams?.s as string);
+        sharedData = JSON.parse(json!);
+      } else if (text.includes('v2=')) {
+        const { queryParams } = Linking.parse(text);
+        const json = LZString.decompressFromEncodedURIComponent(queryParams?.v2 as string);
+        sharedData = JSON.parse(json!);
+      } else if (text.includes('data=')) {
+        const { queryParams } = Linking.parse(text);
+        const json = decode(text);
+        sharedData = JSON.parse(json);
+      } else {
+        // Assume raw inputs
+        try {
+          const json = LZString.decompressFromEncodedURIComponent(text);
+          sharedData = JSON.parse(json!);
+        } catch {
+          const json = decode(text);
+          sharedData = JSON.parse(json);
+        }
+      }
+
+      if (!sharedData) {
+        Alert.alert('Erreur', 'Lien ou code invalide.');
+        return;
+      }
+
+      let colName = 'Sans titre';
+      if (Array.isArray(sharedData)) {
+        colName = sharedData[2][0];
+      } else {
+        colName = sharedData.collection?.name || sharedData.c?.n || 'Sans titre';
+      }
+
+      Alert.alert(
+        '📥 Importer une collection',
+        `Voulez-vous importer "${colName}" ?`,
+        [
+          { text: 'Annuler', style: 'cancel' },
+          { 
+            text: 'Importer', 
+            onPress: async () => {
+              await importSharedCollection(sharedData);
+              getCollections().then(setCollections);
+              Alert.alert('Succès', 'Collection importée avec succès !');
+            }
+          }
+        ]
+      );
+    } catch (e) {
+      Alert.alert('Erreur', 'Impossible de lire le code de partage.');
+    }
+  };
+
   const renderItem = ({ item }: { item: Collection }) => {
     const IconComp = ICONS[item.emoji || 'Folder'] || Folder;
 
@@ -141,14 +210,25 @@ export default function CollectionsListScreen({ navigation }: Props) {
           <Text style={[styles.subtitle, { color: colors.textSecondary }]}>Organisez vos lieux favoris</Text>
         </View>
 
-        <TouchableOpacity
-          style={[styles.addBtn, { backgroundColor: colors.primary }, Shadows.glow(colors.primary)]}
-          onPress={() => setModalVisible(true)}
-          activeOpacity={0.9}
-        >
-          <Plus size={20} color={colors.textOnPrimary} strokeWidth={2.5} style={{ marginRight: 4 }} />
-          <Text style={[styles.addBtnText, { color: colors.textOnPrimary }]}>Créer</Text>
-        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', gap: Spacing.sm }}>
+          <TouchableOpacity
+            style={[styles.importBtn, { backgroundColor: colors.surfaceLight }, Shadows.sm]}
+            onPress={handleManualImport}
+            activeOpacity={0.8}
+            accessibilityLabel="Importer depuis le presse-papier"
+          >
+            <Download size={20} color={colors.primary} strokeWidth={2.5} />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.addBtn, { backgroundColor: colors.primary }, Shadows.glow(colors.primary)]}
+            onPress={() => setModalVisible(true)}
+            activeOpacity={0.9}
+          >
+            <Plus size={20} color={colors.textOnPrimary} strokeWidth={2.5} style={{ marginRight: 4 }} />
+            <Text style={[styles.addBtnText, { color: colors.textOnPrimary }]}>Créer</Text>
+          </TouchableOpacity>
+        </View>
       </BlurView>
 
       <FlatList
@@ -220,6 +300,13 @@ const styles = StyleSheet.create({
   addBtnText: {
     fontSize: FontSize.sm,
     fontFamily: FontFamily.bold,
+  },
+  importBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   list: {
     paddingHorizontal: Spacing.xl,
