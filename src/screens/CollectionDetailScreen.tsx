@@ -12,11 +12,16 @@ import {
 import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { Pencil, Trash2, LibraryBig, ArrowLeft, MoreVertical } from 'lucide-react-native';
+import { Pencil, Trash2, LibraryBig, ArrowLeft, MoreVertical, Share2 } from 'lucide-react-native';
 import { BlurView } from 'expo-blur';
+import * as Linking from 'expo-linking';
+import * as Sharing from 'expo-sharing';
+import { encode } from 'base-64';
+import LZString from 'lz-string';
 
 import { Collection, Restaurant, CollectionsStackParamList } from '../types';
 import { getCollections, getRestaurants, deleteCollection, saveCollection, removeRestaurantFromCollection } from '../storage/storage';
+import { CATEGORIES } from '../constants/categories';
 import RestaurantCard from '../components/RestaurantCard';
 import CollectionFormModal from '../components/CollectionFormModal';
 import EmptyState from '../components/EmptyState';
@@ -103,6 +108,58 @@ export default function CollectionDetailScreen({ route, navigation }: Props) {
     loadData();
   };
 
+  const handleShare = async () => {
+    if (!collection) return;
+
+    try {
+      // Version 3: Positional array for extreme link shortening
+      const catKeys = Object.keys(CATEGORIES);
+      
+      const colData = [
+        collection.name,
+        collection.emoji,
+        collection.description || ''
+      ];
+
+      const restosData = restaurants.map(r => [
+        r.name,
+        catKeys.indexOf(r.category),
+        r.description || '',
+        r.address || '',
+        r.priceLevel,
+        r.priceMin,
+        r.priceMax,
+        r.location ? [r.location.latitude, r.location.longitude] : null
+      ]);
+
+      const minifiedData = [
+        3, // Version
+        'un ami', // User
+        colData,
+        restosData
+      ];
+
+      const json = JSON.stringify(minifiedData);
+      const compressed = LZString.compressToEncodedURIComponent(json);
+      
+      // Use a shorter key 's' for share
+      const shareUrl = Linking.createURL('share', {
+        queryParams: { s: compressed },
+      });
+
+      const message = `Ma collec' "${collection.name}" sur RestoHub :\n${shareUrl}`;
+
+      const { Share } = require('react-native');
+      await Share.share({
+        message,
+        url: shareUrl,
+      });
+    } catch (e) {
+      console.error('Sharing failed', e);
+      Alert.alert('Erreur', 'Impossible de partager la collection.');
+    }
+  };
+
   if (!collection) return <View style={[s.container, { backgroundColor: colors.background }]}><Text style={[s.notFound, { color: colors.textMuted }]}>Collection non trouvée</Text></View>;
 
   const IconComp = ICONS[collection.emoji || 'Folder'] || Folder;
@@ -166,6 +223,14 @@ export default function CollectionDetailScreen({ route, navigation }: Props) {
               >
                 <Trash2 size={18} color={colors.danger} style={{ marginRight: 8 }} />
                 <Text style={[s.actionText, { color: colors.danger }]}>Supprimer</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[s.actionBtn, { backgroundColor: colors.primary }, Shadows.sm]}
+                onPress={handleShare}
+                activeOpacity={0.8}
+              >
+                <Share2 size={18} color="#FFF" style={{ marginRight: 8 }} />
+                <Text style={[s.actionText, { color: "#FFF" }]}>Partager</Text>
               </TouchableOpacity>
             </View>
           </Animated.View>
@@ -274,6 +339,8 @@ const s = StyleSheet.create({
   },
   actions: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
     gap: Spacing.md,
     marginTop: Spacing.xl
   },
