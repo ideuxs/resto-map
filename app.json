@@ -25,6 +25,16 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "plugins": [
+      "expo-font",
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Permettre à RestoHub d'accéder à votre position pour localiser vos restaurants."
+        }
+      ],
+      "expo-asset"
+    ]
   }
 }
