@@ -16,6 +16,20 @@ export async function getRestaurants(): Promise<Restaurant[]> {
   }
 }
 
+// Simple change emitter so UI can react to restaurant updates
+const restaurantChangeListeners: Set<() => void> = new Set();
+
+export function addRestaurantsChangeListener(cb: () => void) {
+  restaurantChangeListeners.add(cb);
+  return () => restaurantChangeListeners.delete(cb);
+}
+
+function emitRestaurantsChanged() {
+  for (const cb of Array.from(restaurantChangeListeners)) {
+    try { cb(); } catch (e) { /* swallow listener errors */ }
+  }
+}
+
 export async function saveRestaurant(restaurant: Restaurant): Promise<void> {
   const restaurants = await getRestaurants();
   const idx = restaurants.findIndex((r) => r.id === restaurant.id);
@@ -25,6 +39,7 @@ export async function saveRestaurant(restaurant: Restaurant): Promise<void> {
     restaurants.unshift(restaurant);
   }
   await AsyncStorage.setItem(RESTAURANTS_KEY, JSON.stringify(restaurants));
+  emitRestaurantsChanged();
 }
 
 export async function deleteRestaurant(id: string): Promise<void> {
@@ -39,6 +54,7 @@ export async function deleteRestaurant(id: string): Promise<void> {
     restaurantIds: c.restaurantIds.filter((rid) => rid !== id),
   }));
   await AsyncStorage.setItem(COLLECTIONS_KEY, JSON.stringify(updated));
+  emitRestaurantsChanged();
 }
 
 // ─── Collections ─────────────────────────────────────────────
@@ -180,6 +196,9 @@ export async function importSharedCollection(data: any): Promise<string> {
   };
   existingCols.unshift(newCol);
   await AsyncStorage.setItem(COLLECTIONS_KEY, JSON.stringify(existingCols));
+
+  // Notify listeners that restaurants (and collections) changed due to import
+  emitRestaurantsChanged();
 
   return newCol.id;
 }

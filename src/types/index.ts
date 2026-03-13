@@ -56,4 +56,6 @@ export type RestaurantsStackParamList = {
 export type CollectionsStackParamList = {
   CollectionsList: undefined;
   CollectionDetail: { collectionId: string };
+  RestaurantDetail: { restaurantId: string };
+  AddRestaurant: { restaurant?: Restaurant };
 };

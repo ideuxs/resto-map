@@ -12,15 +12,13 @@ import {
 import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { Pencil, Trash2, LibraryBig, ArrowLeft, MoreVertical, Share2 } from 'lucide-react-native';
+import { Pencil, Trash2, LibraryBig, ArrowLeft, Share2 } from 'lucide-react-native';
 import { BlurView } from 'expo-blur';
 import * as Linking from 'expo-linking';
-import * as Sharing from 'expo-sharing';
-import { encode } from 'base-64';
 import LZString from 'lz-string';
 
 import { Collection, Restaurant, CollectionsStackParamList } from '../types';
-import { getCollections, getRestaurants, deleteCollection, saveCollection, removeRestaurantFromCollection } from '../storage/storage';
+import { getCollections, getRestaurants, deleteCollection, saveCollection, removeRestaurantFromCollection, addRestaurantsChangeListener } from '../storage/storage';
 import { CATEGORIES } from '../constants/categories';
 import RestaurantCard from '../components/RestaurantCard';
 import CollectionFormModal from '../components/CollectionFormModal';
@@ -77,6 +75,12 @@ export default function CollectionDetailScreen({ route, navigation }: Props) {
 
   useFocusEffect(useCallback(() => { loadData(); }, []));
 
+  // Refresh when restaurants change (edited/imported/deleted)
+  React.useEffect(() => {
+    const unsubscribe = addRestaurantsChangeListener(() => { loadData(); });
+    return () => { unsubscribe(); };
+  }, []);
+
   const loadData = async () => {
     const cols = await getCollections();
     const col = cols.find((c) => c.id === route.params.collectionId);
@@ -106,6 +110,14 @@ export default function CollectionDetailScreen({ route, navigation }: Props) {
     await saveCollection({ ...collection, name: data.name, emoji: data.emoji, description: data.description || undefined });
     setEditModal(false);
     loadData();
+  };
+
+  const openRestaurantDetail = (restaurantId: string) => {
+    navigation.navigate('RestaurantDetail', { restaurantId });
+  };
+
+  const openRestaurantEdit = (restaurant: Restaurant) => {
+    navigation.navigate('AddRestaurant', { restaurant });
   };
 
   const handleShare = async () => {
@@ -236,18 +248,32 @@ export default function CollectionDetailScreen({ route, navigation }: Props) {
           </Animated.View>
         }
         renderItem={({ item }) => (
-          <TouchableOpacity onLongPress={() => handleRemove(item.id, item.name)} activeOpacity={0.9}>
+          <View style={s.itemBlock}>
             <RestaurantCard
               restaurant={item}
-              onPress={() => {
-                const parent = navigation.getParent();
-                if (parent) (parent as any).navigate('RestaurantsTab', {
-                  screen: 'RestaurantDetail',
-                  params: { restaurantId: item.id }
-                });
-              }}
+              onPress={() => openRestaurantDetail(item.id)}
             />
-          </TouchableOpacity>
+
+            <View style={s.itemActionsRow}>
+              <TouchableOpacity
+                style={[s.itemActionBtn, { backgroundColor: colors.surface, borderColor: colors.border }, Shadows.sm]}
+                onPress={() => openRestaurantEdit(item)}
+                activeOpacity={0.85}
+              >
+                <Pencil size={16} color={colors.textPrimary} style={{ marginRight: 6 }} />
+                <Text style={[s.itemActionText, { color: colors.textPrimary }]}>Modifier</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[s.itemActionBtn, { backgroundColor: colors.danger + '10', borderColor: colors.danger + '35' }, Shadows.sm]}
+                onPress={() => handleRemove(item.id, item.name)}
+                activeOpacity={0.85}
+              >
+                <Trash2 size={16} color={colors.danger} style={{ marginRight: 6 }} />
+                <Text style={[s.itemActionText, { color: colors.danger }]}>Retirer</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
         )}
         contentContainerStyle={[restaurants.length === 0 ? s.emptyContainer : s.list, { paddingBottom: insets.bottom + 40 }]}
         ListEmptyComponent={
@@ -358,6 +384,29 @@ const s = StyleSheet.create({
   list: {
     paddingHorizontal: Spacing.xl,
     paddingTop: Spacing.md,
+  },
+  itemBlock: {
+    marginBottom: Spacing.md,
+  },
+  itemActionsRow: {
+    marginTop: -Spacing.md,
+    marginBottom: Spacing.sm,
+    paddingHorizontal: Spacing.xxl,
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: Spacing.sm,
+  },
+  itemActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderRadius: BorderRadius.full,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.xs,
+  },
+  itemActionText: {
+    fontSize: FontSize.xs,
+    fontFamily: FontFamily.bold,
   },
   emptyContainer: {
     flexGrow: 1,

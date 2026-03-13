@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,17 +7,14 @@ import {
   TouchableOpacity,
   StyleSheet,
   StatusBar,
-  Animated,
-  // Fix: height animation doesn't support native driver
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Search, Utensils, Plus, Sun, Moon } from 'lucide-react-native';
-import { BlurView } from 'expo-blur';
 
 import { Restaurant, RestaurantsStackParamList } from '../types';
-import { getRestaurants } from '../storage/storage';
+import { getRestaurants, addRestaurantsChangeListener } from '../storage/storage';
 import RestaurantCard from '../components/RestaurantCard';
 import EmptyState from '../components/EmptyState';
 import { useTheme } from '../theme/ThemeProvider';
@@ -31,13 +28,18 @@ export default function RestaurantListScreen({ navigation }: Props) {
   const [search, setSearch] = useState('');
   const insets = useSafeAreaInsets();
 
-  const scrollY = useRef(new Animated.Value(0)).current;
-
   useFocusEffect(
     useCallback(() => {
       getRestaurants().then(setRestaurants);
     }, [])
   );
+
+  useEffect(() => {
+    const unsubscribe = addRestaurantsChangeListener(() => {
+      getRestaurants().then(setRestaurants);
+    });
+    return () => { unsubscribe(); };
+  }, []);
 
   const filtered = restaurants.filter(
     (r) =>
@@ -46,55 +48,13 @@ export default function RestaurantListScreen({ navigation }: Props) {
       r.category.toLowerCase().includes(search.toLowerCase())
   );
 
-  const headerOpacity = scrollY.interpolate({
-    inputRange: [0, 50, 100],
-    outputRange: [1, 0.8, 0],
-    extrapolate: 'clamp',
-  });
-
-  const headerTranslateY = scrollY.interpolate({
-    inputRange: [0, 100],
-    outputRange: [0, -50],
-    extrapolate: 'clamp',
-  });
-
-  const HeaderBackground = Animated.createAnimatedComponent(BlurView);
-
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor="transparent" translucent />
+      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.background} translucent={false} />
 
-      {/* Sticky Compact Header */}
-      <HeaderBackground
-        intensity={isDark ? 40 : 80}
-        tint={isDark ? "dark" : "light"}
-        style={[
-          styles.headerBlur,
-          { height: insets.top + 60, paddingTop: insets.top + 6 }
-        ]}
-      >
-        <Animated.Text
-          style={[
-            styles.stickyTitle,
-            {
-              color: colors.textPrimary,
-              opacity: scrollY.interpolate({ inputRange: [100, 150], outputRange: [0, 1], extrapolate: 'clamp' }),
-            }
-          ]}
-          numberOfLines={1}
-        >
-          Mes adresses
-        </Animated.Text>
-      </HeaderBackground>
-
-      <Animated.FlatList
+      <FlatList
         data={filtered}
         keyExtractor={(item) => item.id}
-        onScroll={Animated.event(
-          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-          { useNativeDriver: true }
-        )}
-        scrollEventThrottle={16}
         renderItem={({ item }) => (
           <RestaurantCard
             restaurant={item}
@@ -102,7 +62,7 @@ export default function RestaurantListScreen({ navigation }: Props) {
           />
         )}
         ListHeaderComponent={
-          <View style={[styles.mainHeaderContent, { paddingTop: insets.top + 50 }]}>
+          <View style={[styles.mainHeaderContent, { paddingTop: insets.top + Spacing.lg }]}> 
             <View style={styles.titleRow}>
               <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
                 <Text style={[styles.mainTitle, { color: colors.textPrimary }]}>Mes adresses</Text>
@@ -174,27 +134,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  headerBlur: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    zIndex: 10,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(150,150,150,0.2)',
-    paddingHorizontal: Spacing.xl,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
   mainHeaderContent: {
     paddingHorizontal: Spacing.xl,
     paddingBottom: Spacing.xl,
-  },
-  stickyTitle: {
-    fontSize: FontSize.sm + 1,
-    fontFamily: FontFamily.bold,
-    letterSpacing: 0.5,
-    textTransform: 'uppercase',
   },
   titleRow: {
     flexDirection: 'row',

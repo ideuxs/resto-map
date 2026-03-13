@@ -168,7 +168,7 @@ export default function CollectionsListScreen({ navigation }: Props) {
         style={[
           styles.card,
           { backgroundColor: colors.surface },
-          Shadows.sm
+          Shadows.md
         ]}
         onPress={() => navigation.navigate('CollectionDetail', { collectionId: item.id })}
         activeOpacity={0.8}

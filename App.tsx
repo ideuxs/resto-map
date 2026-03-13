@@ -4,7 +4,6 @@ import { ActivityIndicator, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { NavigationContainer, Theme, DefaultTheme as NavDefaultTheme, DarkTheme as NavDarkTheme } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { BlurView } from 'expo-blur';
 import { StyleSheet } from 'react-native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -74,6 +73,8 @@ function CollectionsNavigator() {
     >
       <ColStack.Screen name="CollectionsList" component={CollectionsListScreen} options={{ headerShown: false }} />
       <ColStack.Screen name="CollectionDetail" component={CollectionDetailScreen} options={{ title: '' }} />
+      <ColStack.Screen name="RestaurantDetail" component={RestaurantDetailScreen} options={{ title: '' }} />
+      <ColStack.Screen name="AddRestaurant" component={AddRestaurantScreen} options={{ title: '' }} />
     </ColStack.Navigator>
   );
 }
@@ -177,6 +178,10 @@ function AppContent() {
               backgroundColor: colors.surface,
               borderTopWidth: 0,
               elevation: 8,
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: -3 },
+              shadowOpacity: isDark ? 0.35 : 0.15,
+              shadowRadius: 8,
               height: 75,
               paddingBottom: 15,
               paddingTop: 10,
