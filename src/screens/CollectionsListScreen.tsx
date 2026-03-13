@@ -201,7 +201,7 @@ export default function CollectionsListScreen({ navigation }: Props) {
       <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.background} />
 
       <BlurView
-        intensity={isDark ? 40 : 80}
+        intensity={isDark ? 40 : 30}
         tint={isDark ? "dark" : "light"}
         style={[styles.header, { paddingTop: insets.top, height: insets.top + 140 }]}
       >
