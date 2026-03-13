@@ -203,7 +203,7 @@ export default function CollectionsListScreen({ navigation }: Props) {
       <BlurView
         intensity={isDark ? 40 : 80}
         tint={isDark ? "dark" : "light"}
-        style={[styles.header, { paddingTop: insets.top + 60, height: insets.top + 140 }]}
+        style={[styles.header, { paddingTop: insets.top, height: insets.top + 140 }]}
       >
         <View>
           <Text style={[styles.title, { color: colors.textPrimary }]}>Vos listes</Text>
