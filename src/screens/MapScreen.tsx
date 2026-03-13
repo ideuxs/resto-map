@@ -5,7 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Compass, Map, Sparkles, MapPin, Navigation } from 'lucide-react-native';
+import { Compass, Map, MapPin, Navigation } from 'lucide-react-native';
 import * as Location from 'expo-location';
 
 import { Restaurant, RestaurantCategory } from '../types';
@@ -13,6 +13,7 @@ import { getRestaurants, addRestaurantsChangeListener } from '../storage/storage
 import { CATEGORIES, CATEGORY_LIST } from '../constants/categories';
 import { useTheme } from '../theme/ThemeProvider';
 import { Spacing, BorderRadius, FontSize, FontFamily, Shadows } from '../constants/theme';
+import { getTravelTimesFromCurrentPosition } from '../services/travelTimes';
 
 export default function MapScreen() {
   const navigation = useNavigation<any>();
@@ -21,6 +22,11 @@ export default function MapScreen() {
   const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
   const [filter, setFilter] = useState<RestaurantCategory | null>(null);
   const [userLocation, setUserLocation] = useState<Location.LocationObjectCoords | null>(null);
+  const [selectedRestaurantId, setSelectedRestaurantId] = useState<string | null>(null);
+  const [etaCar, setEtaCar] = useState<string | null>(null);
+  const [etaTransit, setEtaTransit] = useState<string | null>(null);
+  const [isEtaLoading, setIsEtaLoading] = useState(false);
+  const lastEtaFetchRef = useRef<number>(0);
   const insets = useSafeAreaInsets();
 
   useFocusEffect(useCallback(() => { getRestaurants().then(setRestaurants); }, []));
@@ -89,6 +95,39 @@ export default function MapScreen() {
       500
     );
   };
+
+  const loadTravelEstimates = useCallback(async (restaurant: Restaurant) => {
+    if (!userLocation || !restaurant.location) {
+      setEtaCar(null);
+      setEtaTransit(null);
+      return;
+    }
+
+    setIsEtaLoading(true);
+    const result = await getTravelTimesFromCurrentPosition({
+      originLat: userLocation.latitude,
+      originLng: userLocation.longitude,
+      destLat: restaurant.location.latitude,
+      destLng: restaurant.location.longitude,
+    });
+
+    setEtaCar(result.driving);
+    setEtaTransit(result.transit);
+    setIsEtaLoading(false);
+  }, [userLocation]);
+
+  useEffect(() => {
+    if (!selectedRestaurantId || !userLocation) return;
+
+    const now = Date.now();
+    if (now - lastEtaFetchRef.current < 10000) return;
+
+    const selectedRestaurant = restaurants.find((r) => r.id === selectedRestaurantId);
+    if (!selectedRestaurant?.location) return;
+
+    lastEtaFetchRef.current = now;
+    loadTravelEstimates(selectedRestaurant);
+  }, [selectedRestaurantId, userLocation, restaurants, loadTravelEstimates]);
 
   const withLocation = restaurants.filter((r) => r.location && (filter === null || r.category === filter));
 
@@ -233,6 +272,12 @@ export default function MapScreen() {
               key={r.id}
               coordinate={{ latitude: r.location!.latitude, longitude: r.location!.longitude }}
               pinColor={cat.color}
+              onPress={() => {
+                setSelectedRestaurantId(r.id);
+                setEtaCar(null);
+                setEtaTransit(null);
+                loadTravelEstimates(r);
+              }}
             >
               <Callout tooltip onPress={() => navigation.navigate('RestaurantsTab', { screen: 'RestaurantDetail', params: { restaurantId: r.id } })}>
                 <View style={s.calloutContainer}>
@@ -276,6 +321,13 @@ export default function MapScreen() {
                         <Text style={[s.calloutPrice, { color: colors.textPrimary }]}>{'€'.repeat(r.priceLevel)}</Text>
                       ) : null}
                     </View>
+
+                    {selectedRestaurantId === r.id ? (
+                      <View style={s.calloutEtaBlock}>
+                        <Text style={[s.calloutEtaLine, { color: colors.textPrimary }]}>Voiture: {isEtaLoading ? '...' : (etaCar || '--')}</Text>
+                        <Text style={[s.calloutEtaLine, { color: colors.textPrimary }]}>Transport: {isEtaLoading ? '...' : (etaTransit || '--')}</Text>
+                      </View>
+                    ) : null}
                   </View>
                   <View style={[s.calloutArrow, { backgroundColor: isDark ? 'rgba(30,30,30,0.95)' : 'rgba(255,255,255,0.95)', borderBottomColor: cat.color + '40', borderRightColor: cat.color + '40' }]} />
                 </View>
@@ -478,6 +530,14 @@ const s = StyleSheet.create({
   calloutPrice: {
     fontSize: FontSize.sm,
     fontFamily: FontFamily.bold,
+  },
+  calloutEtaBlock: {
+    marginTop: Spacing.sm,
+    gap: 4,
+  },
+  calloutEtaLine: {
+    fontSize: FontSize.xs,
+    fontFamily: FontFamily.semiBold,
   },
   locateBtn: {
     position: 'absolute',
