@@ -1,5 +1,6 @@
 {
   "expo": {
+<<<<<<< HEAD
     "name": "resto-mapper",
     "slug": "resto-mapper",
     "version": "1.0.0",
@@ -9,10 +10,22 @@
     "newArchEnabled": true,
     "splash": {
       "image": "./assets/splash-icon.png",
+=======
+    "name": "RestoHub",
+    "slug": "RestoHub",
+    "version": "1.0.0",
+    "scheme": "restohub",
+    "orientation": "portrait",
+    "icon": "./assets/rh.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/rh.png",
+>>>>>>> master
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
     "ios": {
+<<<<<<< HEAD
       "supportsTablet": true
     },
     "android": {
@@ -21,12 +34,41 @@
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true
+=======
+      "supportsTablet": true,
+      "bundleIdentifier": "com.issamahamat.RestoHub"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION"
+      ],
+      "package": "com.issamahamat.RestoHub"
+>>>>>>> master
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
+<<<<<<< HEAD
       "expo-sqlite"
+=======
+      "expo-font",
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Permettre à RestoHub d'accéder à votre position pour localiser vos restaurants."
+        }
+      ],
+      "expo-asset"
+>>>>>>> master
     ]
   }
 }

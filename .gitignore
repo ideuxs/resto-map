@@ -32,6 +32,17 @@ yarn-error.*
 
 # local env files
 .env*.local
+<<<<<<< HEAD
 
 # typescript
 *.tsbuildinfo
+=======
+*.env
+
+# typescript
+*.tsbuildinfo
+
+# generated native folders
+/ios
+/android
+>>>>>>> master
