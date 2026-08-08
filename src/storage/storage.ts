@@ -18,14 +18,26 @@ export async function getRestaurants(): Promise<Restaurant[]> {
 
 // Simple change emitter so UI can react to restaurant updates
 const restaurantChangeListeners: Set<() => void> = new Set();
+const collectionChangeListeners: Set<() => void> = new Set();
 
 export function addRestaurantsChangeListener(cb: () => void) {
   restaurantChangeListeners.add(cb);
   return () => restaurantChangeListeners.delete(cb);
 }
 
+export function addCollectionsChangeListener(cb: () => void) {
+  collectionChangeListeners.add(cb);
+  return () => collectionChangeListeners.delete(cb);
+}
+
 function emitRestaurantsChanged() {
   for (const cb of Array.from(restaurantChangeListeners)) {
+    try { cb(); } catch (e) { /* swallow listener errors */ }
+  }
+}
+
+function emitCollectionsChanged() {
+  for (const cb of Array.from(collectionChangeListeners)) {
     try { cb(); } catch (e) { /* swallow listener errors */ }
   }
 }
@@ -55,6 +67,7 @@ export async function deleteRestaurant(id: string): Promise<void> {
   }));
   await AsyncStorage.setItem(COLLECTIONS_KEY, JSON.stringify(updated));
   emitRestaurantsChanged();
+  emitCollectionsChanged();
 }
 
 // ─── Collections ─────────────────────────────────────────────
@@ -77,12 +90,14 @@ export async function saveCollection(collection: Collection): Promise<void> {
     collections.unshift(collection);
   }
   await AsyncStorage.setItem(COLLECTIONS_KEY, JSON.stringify(collections));
+  emitCollectionsChanged();
 }
 
 export async function deleteCollection(id: string): Promise<void> {
   const collections = await getCollections();
   const filtered = collections.filter((c) => c.id !== id);
   await AsyncStorage.setItem(COLLECTIONS_KEY, JSON.stringify(filtered));
+  emitCollectionsChanged();
 }
 
 export async function addRestaurantToCollection(
@@ -94,6 +109,7 @@ export async function addRestaurantToCollection(
   if (col && !col.restaurantIds.includes(restaurantId)) {
     col.restaurantIds.push(restaurantId);
     await AsyncStorage.setItem(COLLECTIONS_KEY, JSON.stringify(collections));
+    emitCollectionsChanged();
   }
 }
 
@@ -106,6 +122,7 @@ export async function removeRestaurantFromCollection(
   if (col) {
     col.restaurantIds = col.restaurantIds.filter((id) => id !== restaurantId);
     await AsyncStorage.setItem(COLLECTIONS_KEY, JSON.stringify(collections));
+    emitCollectionsChanged();
   }
 }
 
@@ -138,6 +155,11 @@ export async function importSharedCollection(data: any): Promise<string> {
       priceMin: r[5],
       priceMax: r[6],
       location: r[7] ? { latitude: r[7][0], longitude: r[7][1] } : undefined,
+      visitedAt: r[8],
+      rating: r[9],
+      wouldReturn: r[10],
+      signatureDish: r[11],
+      tags: Array.isArray(r[12]) ? r[12] : [],
       images: [],
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
@@ -166,6 +188,11 @@ export async function importSharedCollection(data: any): Promise<string> {
         priceMin: r.pm,
         priceMax: r.px,
         location: r.l,
+        visitedAt: r.va,
+        rating: r.rt,
+        wouldReturn: r.wr,
+        signatureDish: r.sd,
+        tags: r.t || [],
         images: [],
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
@@ -199,6 +226,7 @@ export async function importSharedCollection(data: any): Promise<string> {
 
   // Notify listeners that restaurants (and collections) changed due to import
   emitRestaurantsChanged();
+  emitCollectionsChanged();
 
   return newCol.id;
 }

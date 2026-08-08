@@ -23,6 +23,11 @@ export interface Restaurant {
   category: RestaurantCategory;
   description?: string;
   address?: string;
+  visitedAt?: string;
+  rating?: number; // 1-5
+  wouldReturn?: boolean;
+  signatureDish?: string;
+  tags?: string[];
   priceMin?: number;
   priceMax?: number;
   priceLevel?: number; // 1-4 (€, €€, €€€, €€€€)

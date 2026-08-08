@@ -6,11 +6,12 @@ import {
   TouchableOpacity,
   StyleSheet,
   StatusBar,
+  TextInput,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { Search, Plus, LibraryBig, Folder, Download } from 'lucide-react-native';
+import { Search, Plus, LibraryBig, Folder, Download, ArrowDownAZ, Clock3 } from 'lucide-react-native';
 import { BlurView } from 'expo-blur';
 import * as Clipboard from 'expo-clipboard';
 import { decode } from 'base-64';
@@ -19,7 +20,7 @@ import * as Linking from 'expo-linking';
 import LZString from 'lz-string';
 
 import { Collection, CollectionsStackParamList } from '../types';
-import { getCollections, saveCollection, importSharedCollection } from '../storage/storage';
+import { addCollectionsChangeListener, addRestaurantsChangeListener, getCollections, saveCollection, importSharedCollection } from '../storage/storage';
 import CollectionFormModal from '../components/CollectionFormModal';
 import EmptyState from '../components/EmptyState';
 import { useTheme } from '../theme/ThemeProvider';
@@ -68,13 +69,28 @@ export default function CollectionsListScreen({ navigation }: Props) {
   const [collections, setCollections] = useState<Collection[]>([]);
   const [modalVisible, setModalVisible] = useState(false);
   const [editingCollection, setEditingCollection] = useState<Collection | null>(null);
+  const [search, setSearch] = useState('');
+  const [sortBy, setSortBy] = useState<'recent' | 'name'>('recent');
   const insets = useSafeAreaInsets();
+
+  const loadCollections = useCallback(() => {
+    getCollections().then(setCollections);
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
-      getCollections().then(setCollections);
-    }, [])
+      loadCollections();
+    }, [loadCollections])
   );
+
+  React.useEffect(() => {
+    const unsubscribeCollections = addCollectionsChangeListener(loadCollections);
+    const unsubscribeRestaurants = addRestaurantsChangeListener(loadCollections);
+    return () => {
+      unsubscribeCollections();
+      unsubscribeRestaurants();
+    };
+  }, [loadCollections]);
 
   const handleSave = async (data: { name: string; emoji: string; description: string }) => {
     const collection: Collection = {
@@ -88,7 +104,7 @@ export default function CollectionsListScreen({ navigation }: Props) {
     await saveCollection(collection);
     setModalVisible(false);
     setEditingCollection(null);
-    getCollections().then(setCollections);
+    loadCollections();
   };
 
   const openCreate = () => {
@@ -104,27 +120,32 @@ export default function CollectionsListScreen({ navigation }: Props) {
         return;
       }
 
-      let sharedData;
-      if (text.includes('s=')) {
-        const { queryParams } = Linking.parse(text);
-        const json = LZString.decompressFromEncodedURIComponent(queryParams?.s as string);
-        sharedData = JSON.parse(json!);
-      } else if (text.includes('v2=')) {
-        const { queryParams } = Linking.parse(text);
-        const json = LZString.decompressFromEncodedURIComponent(queryParams?.v2 as string);
-        sharedData = JSON.parse(json!);
-      } else if (text.includes('data=')) {
-        const { queryParams } = Linking.parse(text);
-        const json = decode(text);
-        sharedData = JSON.parse(json);
+      let sharedData: any = null;
+      const parsed = Linking.parse(text);
+      const sParam = typeof parsed.queryParams?.s === 'string' ? parsed.queryParams.s : null;
+      const v2Param = typeof parsed.queryParams?.v2 === 'string' ? parsed.queryParams.v2 : null;
+      const v1Param = typeof parsed.queryParams?.data === 'string' ? parsed.queryParams.data : null;
+
+      if (sParam) {
+        const json = LZString.decompressFromEncodedURIComponent(sParam);
+        sharedData = json ? JSON.parse(json) : null;
+      } else if (v2Param) {
+        const json = LZString.decompressFromEncodedURIComponent(v2Param);
+        sharedData = json ? JSON.parse(json) : null;
+      } else if (v1Param) {
+        sharedData = JSON.parse(decode(v1Param));
       } else {
-        // Assume raw inputs
+        // Raw payload fallback (compressed JSON or base64 JSON)
         try {
-          const json = LZString.decompressFromEncodedURIComponent(text);
-          sharedData = JSON.parse(json!);
+          const maybeJson = LZString.decompressFromEncodedURIComponent(text);
+          if (maybeJson) {
+            sharedData = JSON.parse(maybeJson);
+          }
         } catch {
-          const json = decode(text);
-          sharedData = JSON.parse(json);
+          // no-op
+        }
+        if (!sharedData) {
+          sharedData = JSON.parse(decode(text));
         }
       }
 
@@ -149,7 +170,7 @@ export default function CollectionsListScreen({ navigation }: Props) {
             text: 'Importer', 
             onPress: async () => {
               await importSharedCollection(sharedData);
-              getCollections().then(setCollections);
+              loadCollections();
               Alert.alert('Succès', 'Collection importée avec succès !');
             }
           }
@@ -159,6 +180,20 @@ export default function CollectionsListScreen({ navigation }: Props) {
       Alert.alert('Erreur', 'Impossible de lire le code de partage.');
     }
   };
+
+  const normalizedSearch = search.toLowerCase().trim();
+  const visibleCollections = [...collections]
+    .filter((item) => {
+      if (!normalizedSearch) return true;
+      return (
+        item.name.toLowerCase().includes(normalizedSearch) ||
+        (item.description || '').toLowerCase().includes(normalizedSearch)
+      );
+    })
+    .sort((a, b) => {
+      if (sortBy === 'name') return a.name.localeCompare(b.name, 'fr');
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    });
 
   const renderItem = ({ item }: { item: Collection }) => {
     const IconComp = ICONS[item.emoji || 'Folder'] || Folder;
@@ -203,11 +238,51 @@ export default function CollectionsListScreen({ navigation }: Props) {
       <BlurView
         intensity={isDark ? 40 : 30}
         tint={isDark ? "dark" : "light"}
-        style={[styles.header, { paddingTop: insets.top, height: insets.top + 140 }]}
+        style={[styles.header, { paddingTop: insets.top, height: insets.top + 216 }]}
       >
-        <View>
+        <View style={{ flex: 1 }}>
           <Text style={[styles.title, { color: colors.textPrimary }]}>Vos listes</Text>
           <Text style={[styles.subtitle, { color: colors.textSecondary }]}>Organisez vos lieux favoris</Text>
+
+          <View style={[styles.searchWrap, { backgroundColor: colors.surface }]}>
+            <Search size={18} color={colors.textMuted} />
+            <TextInput
+              value={search}
+              onChangeText={setSearch}
+              placeholder="Rechercher une collection..."
+              placeholderTextColor={colors.textMuted}
+              style={[styles.searchInput, { color: colors.textPrimary }]}
+              selectionColor={colors.primary}
+            />
+          </View>
+
+          <View style={styles.sortRow}>
+            <TouchableOpacity
+              style={[
+                styles.sortBtn,
+                { backgroundColor: colors.surfaceLight },
+                sortBy === 'recent' && { backgroundColor: colors.primary + '20' }
+              ]}
+              onPress={() => setSortBy('recent')}
+            >
+              <Clock3 size={14} color={sortBy === 'recent' ? colors.primary : colors.textSecondary} />
+              <Text style={[styles.sortBtnText, { color: sortBy === 'recent' ? colors.primary : colors.textSecondary }]}>Récentes</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.sortBtn,
+                { backgroundColor: colors.surfaceLight },
+                sortBy === 'name' && { backgroundColor: colors.primary + '20' }
+              ]}
+              onPress={() => setSortBy('name')}
+            >
+              <ArrowDownAZ size={14} color={sortBy === 'name' ? colors.primary : colors.textSecondary} />
+              <Text style={[styles.sortBtnText, { color: sortBy === 'name' ? colors.primary : colors.textSecondary }]}>A-Z</Text>
+            </TouchableOpacity>
+            <Text style={[styles.resultText, { color: colors.textMuted }]}>
+              {visibleCollections.length} résultat{visibleCollections.length > 1 ? 's' : ''}
+            </Text>
+          </View>
         </View>
 
         <View style={{ flexDirection: 'row', gap: Spacing.sm }}>
@@ -232,18 +307,20 @@ export default function CollectionsListScreen({ navigation }: Props) {
       </BlurView>
 
       <FlatList
-        data={collections}
+        data={visibleCollections}
         keyExtractor={(item) => item.id}
         renderItem={renderItem}
         contentContainerStyle={[
-          collections.length === 0 ? styles.emptyContainer : styles.list,
-          { paddingTop: insets.top + 160, paddingBottom: insets.bottom + 100 }
+          visibleCollections.length === 0 ? styles.emptyContainer : styles.list,
+          { paddingTop: insets.top + 236, paddingBottom: insets.bottom + 100 }
         ]}
         ListEmptyComponent={
           <EmptyState
             icon={Folder}
-            title="Aucune collection"
-            subtitle="Créez des listes thématiques pour retrouver facilement vos meilleures adresses !"
+            title={collections.length === 0 ? 'Aucune collection' : 'Aucun résultat'}
+            subtitle={collections.length === 0
+              ? 'Créez des listes thématiques pour retrouver facilement vos meilleures adresses !'
+              : 'Aucune collection ne correspond à votre recherche.'}
           />
         }
         showsVerticalScrollIndicator={false}
@@ -288,6 +365,43 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     fontSize: FontSize.md,
+    fontFamily: FontFamily.medium,
+  },
+  searchWrap: {
+    marginTop: Spacing.md,
+    height: 44,
+    borderRadius: BorderRadius.full,
+    paddingHorizontal: Spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: FontSize.sm,
+    fontFamily: FontFamily.medium,
+  },
+  sortRow: {
+    marginTop: Spacing.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+  },
+  sortBtn: {
+    height: 32,
+    borderRadius: BorderRadius.full,
+    paddingHorizontal: Spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  sortBtnText: {
+    fontSize: FontSize.xs,
+    fontFamily: FontFamily.bold,
+  },
+  resultText: {
+    marginLeft: 'auto',
+    fontSize: FontSize.xs,
     fontFamily: FontFamily.medium,
   },
   addBtn: {

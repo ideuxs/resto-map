@@ -18,7 +18,15 @@ import * as Linking from 'expo-linking';
 import LZString from 'lz-string';
 
 import { Collection, Restaurant, CollectionsStackParamList } from '../types';
-import { getCollections, getRestaurants, deleteCollection, saveCollection, removeRestaurantFromCollection, addRestaurantsChangeListener } from '../storage/storage';
+import {
+  getCollections,
+  getRestaurants,
+  deleteCollection,
+  saveCollection,
+  removeRestaurantFromCollection,
+  addRestaurantsChangeListener,
+  addCollectionsChangeListener,
+} from '../storage/storage';
 import { CATEGORIES } from '../constants/categories';
 import RestaurantCard from '../components/RestaurantCard';
 import CollectionFormModal from '../components/CollectionFormModal';
@@ -75,10 +83,14 @@ export default function CollectionDetailScreen({ route, navigation }: Props) {
 
   useFocusEffect(useCallback(() => { loadData(); }, []));
 
-  // Refresh when restaurants change (edited/imported/deleted)
+  // Refresh when restaurants/collections change (edited/imported/deleted)
   React.useEffect(() => {
-    const unsubscribe = addRestaurantsChangeListener(() => { loadData(); });
-    return () => { unsubscribe(); };
+    const unsubscribeRestaurants = addRestaurantsChangeListener(() => { loadData(); });
+    const unsubscribeCollections = addCollectionsChangeListener(() => { loadData(); });
+    return () => {
+      unsubscribeRestaurants();
+      unsubscribeCollections();
+    };
   }, []);
 
   const loadData = async () => {
@@ -141,7 +153,12 @@ export default function CollectionDetailScreen({ route, navigation }: Props) {
         r.priceLevel,
         r.priceMin,
         r.priceMax,
-        r.location ? [r.location.latitude, r.location.longitude] : null
+        r.location ? [r.location.latitude, r.location.longitude] : null,
+        r.visitedAt,
+        r.rating,
+        r.wouldReturn,
+        r.signatureDish || '',
+        r.tags || []
       ]);
 
       const minifiedData = [

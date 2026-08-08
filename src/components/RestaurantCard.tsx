@@ -1,6 +1,6 @@
 import React, { useRef } from 'react';
 import { View, Text, Image, StyleSheet, TouchableWithoutFeedback, Animated } from 'react-native';
-import { MapPin } from 'lucide-react-native';
+import { Calendar, Heart, MapPin, Star } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { Restaurant } from '../types';
@@ -46,6 +46,19 @@ export default function RestaurantCard({ restaurant, onPress }: Props) {
     }
     return null;
   };
+
+  const visitedText = () => {
+    if (!restaurant.visitedAt) return null;
+    const date = new Date(restaurant.visitedAt);
+    if (Number.isNaN(date.getTime())) return null;
+    return date.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' });
+  };
+
+  const metaItems = [
+    restaurant.rating ? { key: 'rating', icon: Star, label: `${restaurant.rating}/5`, color: '#FBBF24', fill: '#FBBF24' } : null,
+    restaurant.wouldReturn ? { key: 'return', icon: Heart, label: 'À refaire', color: '#34D399', fill: '#34D399' } : null,
+    visitedText() ? { key: 'visited', icon: Calendar, label: visitedText()!, color: 'rgba(255,255,255,0.8)', fill: 'transparent' } : null,
+  ].filter(Boolean) as { key: string; icon: typeof Star; label: string; color: string; fill: string }[];
 
   return (
     <TouchableWithoutFeedback
@@ -98,6 +111,19 @@ export default function RestaurantCard({ restaurant, onPress }: Props) {
                     </Text>
                   </View>
                 ) : null}
+                {metaItems.length > 0 ? (
+                  <View style={styles.metaRow}>
+                    {metaItems.map((item) => {
+                      const MetaIcon = item.icon;
+                      return (
+                        <View key={item.key} style={styles.metaPill}>
+                          <MetaIcon size={12} color={item.color} fill={item.fill} style={{ marginRight: 4 }} />
+                          <Text style={styles.metaText}>{item.label}</Text>
+                        </View>
+                      );
+                    })}
+                  </View>
+                ) : null}
                 <View style={styles.bottomRow}>
                   {priceText() ? (
                     <Text style={[styles.price, { color: '#FFD700' }]}>{priceText()}</Text>
@@ -105,6 +131,10 @@ export default function RestaurantCard({ restaurant, onPress }: Props) {
                   {restaurant.description ? (
                     <Text style={[styles.desc, { color: 'rgba(255,255,255,0.5)' }]} numberOfLines={2}>
                       {restaurant.description}
+                    </Text>
+                  ) : restaurant.signatureDish ? (
+                    <Text style={[styles.desc, { color: 'rgba(255,255,255,0.5)' }]} numberOfLines={2}>
+                      À goûter: {restaurant.signatureDish}
                     </Text>
                   ) : null}
                 </View>
@@ -185,6 +215,25 @@ const styles = StyleSheet.create({
   },
   bottomRow: {
     marginTop: Spacing.xs,
+  },
+  metaRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: Spacing.xs,
+  },
+  metaPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: BorderRadius.full,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 4,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+  },
+  metaText: {
+    color: 'rgba(255,255,255,0.88)',
+    fontSize: 11,
+    fontFamily: FontFamily.bold,
   },
   price: {
     fontSize: FontSize.sm,

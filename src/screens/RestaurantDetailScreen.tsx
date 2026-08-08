@@ -17,10 +17,17 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
-import { MapPin, Coins, Navigation, FolderPlus, Pencil, Trash2, ArrowLeft, X, Camera, Check, Sparkles, Folder } from 'lucide-react-native';
+import { MapPin, Coins, FolderPlus, Pencil, Trash2, ArrowLeft, X, Camera, Check, Folder, Star, Heart, Calendar, Tag } from 'lucide-react-native';
 
 import { Restaurant, RestaurantsStackParamList, Collection } from '../types';
-import { getRestaurants, deleteRestaurant, getCollections, addRestaurantToCollection } from '../storage/storage';
+import {
+  getRestaurants,
+  deleteRestaurant,
+  getCollections,
+  addRestaurantToCollection,
+  addRestaurantsChangeListener,
+  addCollectionsChangeListener,
+} from '../storage/storage';
 import { deleteImages } from '../storage/imageStorage';
 import { CATEGORIES } from '../constants/categories';
 import { useTheme } from '../theme/ThemeProvider';
@@ -29,6 +36,13 @@ import { Spacing, BorderRadius, FontSize, FontFamily, Shadows } from '../constan
 type Props = NativeStackScreenProps<RestaurantsStackParamList, 'RestaurantDetail'>;
 const { width } = Dimensions.get('window');
 const HEADER_HEIGHT = 380;
+
+function formatVisitDate(value?: string): string | null {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' });
+}
 
 export default function RestaurantDetailScreen({ route, navigation }: Props) {
   const { colors, isDark } = useTheme();
@@ -48,6 +62,15 @@ export default function RestaurantDetailScreen({ route, navigation }: Props) {
       loadData();
     }, [])
   );
+
+  React.useEffect(() => {
+    const unsubscribeRestaurants = addRestaurantsChangeListener(loadData);
+    const unsubscribeCollections = addCollectionsChangeListener(loadData);
+    return () => {
+      unsubscribeRestaurants();
+      unsubscribeCollections();
+    };
+  }, []);
 
   const loadData = async () => {
     const all = await getRestaurants();
@@ -124,6 +147,8 @@ export default function RestaurantDetailScreen({ route, navigation }: Props) {
   const cat = CATEGORIES[restaurant.category];
   const CategoryIcon = cat.icon;
   const imageCountText = `${restaurant.images.length} photo${restaurant.images.length > 1 ? 's' : ''}`;
+  const visitDateText = formatVisitDate(restaurant.visitedAt);
+  const hasJournal = restaurant.rating || visitDateText || restaurant.wouldReturn || restaurant.signatureDish || (restaurant.tags || []).length > 0;
 
   const priceText = () => {
     const parts: string[] = [];
@@ -196,9 +221,9 @@ export default function RestaurantDetailScreen({ route, navigation }: Props) {
               )}
             />
             <LinearGradient
-              colors={['transparent', colors.background]}
+              colors={['transparent', 'rgba(0,0,0,0.72)', colors.background]}
               style={styles.heroGradient}
-              locations={[0.5, 1]}
+              locations={[0.35, 0.78, 1]}
               pointerEvents="none"
             />
 
@@ -212,6 +237,23 @@ export default function RestaurantDetailScreen({ route, navigation }: Props) {
                 ))}
               </View>
             )}
+
+            <View style={styles.heroMetaCard} pointerEvents="none">
+              <View style={styles.heroMetaTopRow}>
+                <View style={[styles.heroCatPill, { backgroundColor: cat.color + '30', borderColor: cat.color + '55' }]}>
+                  <CategoryIcon size={13} color="#FFF" style={{ marginRight: 5 }} />
+                  <Text style={styles.heroCatText}>{cat.label}</Text>
+                </View>
+                <View style={styles.heroPhotoCount}>
+                  <Camera size={13} color="#FFF" style={{ marginRight: 5 }} />
+                  <Text style={styles.heroPhotoText}>{imageCountText}</Text>
+                </View>
+              </View>
+              <Text style={styles.heroName} numberOfLines={2}>{restaurant.name}</Text>
+              {priceText() ? (
+                <Text style={styles.heroPrice}>{priceText()}</Text>
+              ) : null}
+            </View>
           </View>
         ) : (
           <View style={[styles.heroContainer, { backgroundColor: colors.surfaceLight, alignItems: 'center', justifyContent: 'center' }]}>
@@ -221,6 +263,22 @@ export default function RestaurantDetailScreen({ route, navigation }: Props) {
               style={styles.heroGradient}
               locations={[0.5, 1]}
             />
+            <View style={styles.heroMetaCard} pointerEvents="none">
+              <View style={styles.heroMetaTopRow}>
+                <View style={[styles.heroCatPill, { backgroundColor: cat.color + '30', borderColor: cat.color + '55' }]}>
+                  <CategoryIcon size={13} color="#FFF" style={{ marginRight: 5 }} />
+                  <Text style={styles.heroCatText}>{cat.label}</Text>
+                </View>
+                <View style={styles.heroPhotoCount}>
+                  <Camera size={13} color="#FFF" style={{ marginRight: 5 }} />
+                  <Text style={styles.heroPhotoText}>{imageCountText}</Text>
+                </View>
+              </View>
+              <Text style={styles.heroName} numberOfLines={2}>{restaurant.name}</Text>
+              {priceText() ? (
+                <Text style={styles.heroPrice}>{priceText()}</Text>
+              ) : null}
+            </View>
           </View>
         )}
 
@@ -228,47 +286,116 @@ export default function RestaurantDetailScreen({ route, navigation }: Props) {
         <View style={[styles.content, { backgroundColor: colors.background }]}>
           <View style={[styles.grabHandle, { backgroundColor: colors.border }]} />
 
-          <View style={styles.headerInfo}>
-            <Text style={[styles.name, { color: colors.textPrimary }]}>{restaurant.name}</Text>
+          <View style={[styles.overviewCard, { backgroundColor: colors.surface, borderColor: colors.border }, Shadows.sm]}>
+            <View style={styles.headerInfo}>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.eyebrow, { color: colors.textMuted }]}>Résumé</Text>
+                <Text style={[styles.name, { color: colors.textPrimary }]} numberOfLines={2}>{restaurant.name}</Text>
+              </View>
 
-            <View style={[styles.badge, { backgroundColor: cat.color + '20', borderColor: cat.color + '40' }]}>
-              <CategoryIcon size={14} color={cat.color} style={{ marginRight: 6 }} />
-              <Text style={[styles.badgeText, { color: cat.color }]}>
-                {cat.label}
-              </Text>
+              <View style={[styles.badge, { backgroundColor: cat.color + '16', borderColor: cat.color + '35' }]}>
+                <CategoryIcon size={14} color={cat.color} style={{ marginRight: 6 }} />
+                <Text style={[styles.badgeText, { color: cat.color }]}>
+                  {cat.label}
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.infoBlocks}>
+              {restaurant.address ? (
+                <View style={[styles.infoRow, styles.infoCard, { backgroundColor: colors.background, borderColor: colors.border }]}>
+                  <View style={[styles.iconBox, { backgroundColor: colors.surfaceLight }]}>
+                    <MapPin size={20} color={colors.textSecondary} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.infoLabel, { color: colors.textMuted }]}>Adresse</Text>
+                    <Text style={[styles.infoText, { color: colors.textSecondary }]}>{restaurant.address}</Text>
+                  </View>
+                </View>
+              ) : null}
+
+              {priceText() ? (
+                <View style={[styles.infoRow, styles.infoCard, { backgroundColor: colors.background, borderColor: colors.border }]}>
+                  <View style={[styles.iconBox, { backgroundColor: colors.primary + '15' }]}>
+                    <Coins size={20} color={colors.primary} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.infoLabel, { color: colors.textMuted }]}>Budget</Text>
+                    <Text style={[styles.infoText, { color: colors.textPrimary, fontFamily: FontFamily.bold }]}>{priceText()}</Text>
+                  </View>
+                </View>
+              ) : null}
+
+              <View style={[styles.infoRow, styles.infoCard, { backgroundColor: colors.background, borderColor: colors.border }]}>
+                <View style={[styles.iconBox, { backgroundColor: colors.surfaceLight }]}>
+                  <Camera size={20} color={colors.textSecondary} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.infoLabel, { color: colors.textMuted }]}>Photos</Text>
+                  <Text style={[styles.infoText, { color: colors.textSecondary }]}>{imageCountText}</Text>
+                </View>
+              </View>
             </View>
           </View>
 
-          <View style={styles.infoBlocks}>
-            {restaurant.address ? (
-              <View style={[styles.infoRow, styles.infoCard, { backgroundColor: colors.surface, borderColor: colors.border }, Shadows.sm]}>
-                <View style={[styles.iconBox, { backgroundColor: colors.surfaceLight }]}>
-                  <MapPin size={20} color={colors.textSecondary} />
+          {hasJournal ? (
+            <View style={[styles.journalSection, { backgroundColor: colors.surface, borderColor: colors.border }, Shadows.sm]}>
+              <View style={styles.journalHeader}>
+                <Text style={[styles.sectionTitle, { color: colors.textPrimary, marginBottom: 0 }]}>Mon passage</Text>
+                {restaurant.wouldReturn ? (
+                  <View style={[styles.returnPill, { backgroundColor: colors.success + '18' }]}>
+                    <Heart size={14} color={colors.success} fill={colors.success} />
+                    <Text style={[styles.returnPillText, { color: colors.success }]}>À refaire</Text>
+                  </View>
+                ) : null}
+              </View>
+
+              <View style={styles.journalGrid}>
+                {restaurant.rating ? (
+                  <View style={[styles.journalTile, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                    <Star size={18} color={colors.warning} fill={colors.warning} />
+                    <Text style={[styles.journalValue, { color: colors.textPrimary }]}>{restaurant.rating}/5</Text>
+                    <Text style={[styles.journalLabel, { color: colors.textMuted }]}>Note</Text>
+                  </View>
+                ) : null}
+
+                {visitDateText ? (
+                  <View style={[styles.journalTileWide, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                    <Calendar size={18} color={colors.primary} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.journalValueSmall, { color: colors.textPrimary }]}>{visitDateText}</Text>
+                      <Text style={[styles.journalLabel, { color: colors.textMuted }]}>Date de passage</Text>
+                    </View>
+                  </View>
+                ) : null}
+              </View>
+
+              {restaurant.signatureDish ? (
+                <View style={[styles.signatureBox, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                  <Star size={18} color={colors.warning} fill={colors.warning} />
+                  <Text style={[styles.signatureText, { color: colors.textPrimary }]}>À goûter: {restaurant.signatureDish}</Text>
                 </View>
-                <Text style={[styles.infoText, { color: colors.textSecondary }]}>{restaurant.address}</Text>
+              ) : null}
+
+              {(restaurant.tags || []).length > 0 ? (
+                <View style={styles.tagsRow}>
+                  {(restaurant.tags || []).map((tag) => (
+                    <View key={tag} style={[styles.tagPill, { backgroundColor: colors.primary + '12', borderColor: colors.primary + '30' }]}>
+                      <Tag size={12} color={colors.primary} />
+                      <Text style={[styles.tagText, { color: colors.primary }]}>{tag}</Text>
+                  </View>
+                ))}
               </View>
             ) : null}
-
-            {priceText() ? (
-              <View style={[styles.infoRow, styles.infoCard, { backgroundColor: colors.surface, borderColor: colors.primary + '55' }, Shadows.sm]}>
-                <View style={[styles.iconBox, { backgroundColor: colors.primary + '15' }]}>
-                  <Coins size={20} color={colors.primary} />
-                </View>
-                <Text style={[styles.infoText, { color: colors.primary, fontFamily: FontFamily.bold }]}>{priceText()}</Text>
-              </View>
-            ) : null}
-
-          </View>
+            </View>
+          ) : null}
 
           {/* Description Card */}
           {restaurant.description ? (
-            <LinearGradient
-              colors={isDark ? ['rgba(99,102,241,0.20)', 'rgba(24,24,27,0.6)'] : ['rgba(208, 207, 226, 0.1)', 'rgba(255, 255, 255, 0.95)']}
-              style={[styles.descSection, { borderColor: isDark ? 'rgba(129,140,248,0.22)' : 'rgba(79,70,229,0.16)' }]}
-            >
+            <View style={[styles.descSection, { backgroundColor: colors.surface, borderColor: colors.border }, Shadows.sm]}>
               <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>À propos</Text>
               <Text style={[styles.description, { color: colors.textSecondary }]}>{restaurant.description}</Text>
-            </LinearGradient>
+            </View>
           ) : null}
 
           {/* Actions Grid */}
@@ -552,9 +679,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: Spacing.xl,
     right: Spacing.xl,
-    bottom: Spacing.xxxl + 14,
-    borderRadius: BorderRadius.xxl,
-    padding: Spacing.lg,
+    bottom: Spacing.xxxl + 20,
     overflow: 'hidden',
   },
   heroMetaTopRow: {
@@ -568,10 +693,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderRadius: BorderRadius.full,
     borderWidth: 1,
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 4,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 6,
   },
   heroCatText: {
+    color: '#FFF',
     fontSize: FontSize.xs,
     fontFamily: FontFamily.bold,
   },
@@ -580,7 +706,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderRadius: BorderRadius.full,
     paddingHorizontal: Spacing.sm,
-    paddingVertical: 4,
+    paddingVertical: 6,
+    backgroundColor: 'rgba(15,23,42,0.36)',
   },
   heroPhotoText: {
     color: '#FFF',
@@ -605,7 +732,7 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     paddingHorizontal: Spacing.xl,
-    paddingTop: Spacing.md,
+    paddingTop: Spacing.lg,
     paddingBottom: 60,
     marginTop: -Spacing.xxxl, // Overlap the header slightly
     borderTopLeftRadius: BorderRadius.xxl * 1.5,
@@ -620,16 +747,28 @@ const styles = StyleSheet.create({
     opacity: 0.8,
   },
   headerInfo: {
-    marginBottom: Spacing.xl,
-    marginLeft: 0,
+    marginBottom: Spacing.lg,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: Spacing.md,
+  },
+  overviewCard: {
+    borderWidth: 1,
+    borderRadius: BorderRadius.xxl,
+    padding: Spacing.lg,
+    marginBottom: Spacing.lg,
+  },
+  eyebrow: {
+    fontSize: 11,
+    fontFamily: FontFamily.bold,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    marginBottom: 4,
   },
   name: {
-    marginTop: 4,
-    fontSize: FontSize.xxl + 4,
+    fontSize: FontSize.xl,
     fontFamily: FontFamily.bold,
-    letterSpacing: -0.5,
-    marginBottom: Spacing.md,
-    lineHeight: 34,
+    lineHeight: 26,
   },
   badge: {
     alignSelf: 'flex-start',
@@ -645,9 +784,7 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.bold,
   },
   infoBlocks: {
-    gap: Spacing.lg,
-    marginBottom: Spacing.xxxl,
-    marginLeft: 0,
+    gap: Spacing.sm,
   },
   infoRow: {
     flexDirection: 'row',
@@ -667,14 +804,116 @@ const styles = StyleSheet.create({
     marginRight: Spacing.md,
   },
   infoText: {
-    fontSize: FontSize.md + 1,
+    fontSize: FontSize.sm,
     fontFamily: FontFamily.medium,
     flex: 1,
+    lineHeight: 20,
+  },
+  infoLabel: {
+    fontSize: 11,
+    fontFamily: FontFamily.bold,
+    textTransform: 'uppercase',
+    letterSpacing: 0.7,
+    marginBottom: 2,
   },
   descSection: {
     padding: Spacing.xl,
     borderRadius: BorderRadius.xxl,
     borderWidth: 1,
+    marginBottom: Spacing.lg,
+  },
+  journalSection: {
+    padding: Spacing.xl,
+    borderRadius: BorderRadius.xxl,
+    borderWidth: 1,
+    marginBottom: Spacing.lg,
+  },
+  journalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: Spacing.md,
+  },
+  returnPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: BorderRadius.full,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 5,
+    gap: 5,
+  },
+  returnPillText: {
+    fontSize: FontSize.xs,
+    fontFamily: FontFamily.bold,
+  },
+  journalGrid: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
+    marginBottom: Spacing.sm,
+  },
+  journalTile: {
+    width: 96,
+    borderWidth: 1,
+    borderRadius: BorderRadius.xl,
+    padding: Spacing.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  journalTileWide: {
+    flex: 1,
+    borderWidth: 1,
+    borderRadius: BorderRadius.xl,
+    padding: Spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+  },
+  journalValue: {
+    marginTop: Spacing.xs,
+    fontSize: FontSize.lg,
+    fontFamily: FontFamily.bold,
+  },
+  journalValueSmall: {
+    fontSize: FontSize.md,
+    fontFamily: FontFamily.bold,
+  },
+  journalLabel: {
+    marginTop: 2,
+    fontSize: FontSize.xs,
+    fontFamily: FontFamily.semiBold,
+  },
+  signatureBox: {
+    borderWidth: 1,
+    borderRadius: BorderRadius.xl,
+    padding: Spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    marginTop: Spacing.xs,
+  },
+  signatureText: {
+    flex: 1,
+    fontSize: FontSize.sm,
+    fontFamily: FontFamily.bold,
+  },
+  tagsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.sm,
+    marginTop: Spacing.md,
+  },
+  tagPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: BorderRadius.full,
+    borderWidth: 1,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 5,
+    gap: 4,
+  },
+  tagText: {
+    fontSize: FontSize.xs,
+    fontFamily: FontFamily.bold,
   },
   sectionTitle: {
     fontSize: FontSize.lg,
@@ -698,6 +937,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: Spacing.lg,
     borderRadius: BorderRadius.xxl,
+    borderWidth: 1,
+    borderColor: 'rgba(148,163,184,0.14)',
   },
   actionIconBox: {
     width: 48,

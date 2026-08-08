@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
-import MapView, { Marker, Callout, Circle, PROVIDER_DEFAULT } from 'react-native-maps';
+import MapView, { Marker, Callout, Circle, Polyline, PROVIDER_DEFAULT } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { BlurView } from 'expo-blur';
@@ -25,6 +25,7 @@ export default function MapScreen() {
   const [selectedRestaurantId, setSelectedRestaurantId] = useState<string | null>(null);
   const [etaCar, setEtaCar] = useState<string | null>(null);
   const [etaTransit, setEtaTransit] = useState<string | null>(null);
+  const [drivingPath, setDrivingPath] = useState<{ latitude: number; longitude: number }[] | null>(null);
   const [isEtaLoading, setIsEtaLoading] = useState(false);
   const lastEtaFetchRef = useRef<number>(0);
   const insets = useSafeAreaInsets();
@@ -100,6 +101,7 @@ export default function MapScreen() {
     if (!userLocation || !restaurant.location) {
       setEtaCar(null);
       setEtaTransit(null);
+      setDrivingPath(null);
       return;
     }
 
@@ -113,6 +115,7 @@ export default function MapScreen() {
 
     setEtaCar(result.driving);
     setEtaTransit(result.transit);
+    setDrivingPath(result.drivingPath);
     setIsEtaLoading(false);
   }, [userLocation]);
 
@@ -254,6 +257,16 @@ export default function MapScreen() {
         userInterfaceStyle={isDark ? "dark" : "light"}
         showsBuildings={true}
       >
+        {drivingPath ? (
+          <Polyline
+            coordinates={drivingPath}
+            strokeColor={colors.primary}
+            strokeWidth={4}
+            lineCap="round"
+            lineJoin="round"
+          />
+        ) : null}
+
         {userLocation ? (
           <Circle
             center={{ latitude: userLocation.latitude, longitude: userLocation.longitude }}

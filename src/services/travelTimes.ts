@@ -1,6 +1,7 @@
 export type TravelTimes = {
   driving: string | null;
   transit: string | null;
+  drivingPath: { latitude: number; longitude: number }[] | null;
 };
 
 const NAVITIA_BASE_URL = process.env.EXPO_PUBLIC_IDFM_NAVITIA_BASE_URL || 'https://prim.iledefrance-mobilites.fr/marketplace/v2/navitia';
@@ -64,6 +65,47 @@ async function fetchNavitiaDuration(params: {
   return formatDuration(durationSeconds);
 }
 
+const GEOPF_BASE_URL = 'https://data.geopf.fr/navigation/itineraire';
+
+async function fetchGeopfDrivingRoute(params: {
+  originLat: number;
+  originLng: number;
+  destLat: number;
+  destLng: number;
+  signal: AbortSignal;
+}): Promise<{ duration: string | null; path: { latitude: number; longitude: number }[] | null }> {
+  const { originLat, originLng, destLat, destLng, signal } = params;
+
+  const url = new URL(GEOPF_BASE_URL);
+  url.searchParams.set('resource', 'bdtopo-osrm');
+  url.searchParams.set('start', `${originLng},${originLat}`);
+  url.searchParams.set('end', `${destLng},${destLat}`);
+  url.searchParams.set('profile', 'car');
+  url.searchParams.set('optimization', 'fastest');
+  url.searchParams.set('geometryFormat', 'geojson');
+  url.searchParams.set('getSteps', 'false');
+  url.searchParams.set('getBbox', 'false');
+  url.searchParams.set('distanceUnit', 'kilometer');
+  url.searchParams.set('timeUnit', 'second');
+  url.searchParams.set('crs', 'EPSG:4326');
+
+  const response = await fetch(url.toString(), { signal });
+  if (!response.ok) return { duration: null, path: null };
+
+  const json = await response.json();
+  const durationValue = typeof json?.duration === 'number' ? json.duration : null; // in seconds (requested)
+  const durationSeconds = durationValue ?? (typeof json?.duration === 'string' ? Number(json.duration) : null);
+  const coords: any[] | undefined = json?.geometry?.coordinates;
+
+  const path = Array.isArray(coords)
+    ? coords
+        .filter((pair) => Array.isArray(pair) && pair.length >= 2)
+        .map(([lng, lat]) => ({ latitude: lat, longitude: lng }))
+    : null;
+
+  return { duration: durationSeconds ? formatDuration(durationSeconds) : null, path: path ?? null };
+}
+
 export async function getTravelTimesFromCurrentPosition(params: {
   originLat: number;
   originLng: number;
@@ -74,14 +116,14 @@ export async function getTravelTimesFromCurrentPosition(params: {
   const timeout = setTimeout(() => controller.abort(), 9000);
 
   try {
-    const [driving, transit] = await Promise.all([
-      fetchNavitiaDuration({ ...params, mode: 'car', signal: controller.signal }),
+    const [drivingResult, transit] = await Promise.all([
+      fetchGeopfDrivingRoute({ ...params, signal: controller.signal }),
       fetchNavitiaDuration({ ...params, mode: 'public_transport', signal: controller.signal }),
     ]);
 
-    return { driving, transit };
+    return { driving: drivingResult.duration, transit, drivingPath: drivingResult.path };
   } catch {
-    return { driving: null, transit: null };
+    return { driving: null, transit: null, drivingPath: null };
   } finally {
     clearTimeout(timeout);
   }

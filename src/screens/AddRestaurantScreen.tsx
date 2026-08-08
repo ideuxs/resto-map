@@ -19,7 +19,7 @@ import * as ExpoLocation from 'expo-location';
 import { v4 as uuidv4 } from 'uuid';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Camera, MapPin, Search, X, ArrowLeft, Check } from 'lucide-react-native';
+import { Camera, MapPin, Search, X, ArrowLeft, Check, Star, Heart, Calendar, Tag } from 'lucide-react-native';
 import { BlurView } from 'expo-blur';
 
 import { RestaurantsStackParamList, Restaurant, RestaurantCategory } from '../types';
@@ -31,6 +31,16 @@ import { Spacing, BorderRadius, FontSize, FontFamily, Shadows } from '../constan
 
 type Props = NativeStackScreenProps<RestaurantsStackParamList, 'AddRestaurant'>;
 
+function formatDateForInput(value?: string): string {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  const day = String(date.getUTCDate()).padStart(2, '0');
+  const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const year = date.getUTCFullYear();
+  return `${day}/${month}/${year}`;
+}
+
 export default function AddRestaurantScreen({ route, navigation }: Props) {
   const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
@@ -40,6 +50,11 @@ export default function AddRestaurantScreen({ route, navigation }: Props) {
   const [category, setCategory] = useState<RestaurantCategory>('restaurant');
   const [address, setAddress] = useState('');
   const [description, setDescription] = useState('');
+  const [visitedAt, setVisitedAt] = useState('');
+  const [rating, setRating] = useState(0);
+  const [wouldReturn, setWouldReturn] = useState(false);
+  const [signatureDish, setSignatureDish] = useState('');
+  const [tagsText, setTagsText] = useState('');
   const [priceMin, setPriceMin] = useState('');
   const [priceMax, setPriceMax] = useState('');
   const [priceLevel, setPriceLevel] = useState(0);
@@ -56,6 +71,11 @@ export default function AddRestaurantScreen({ route, navigation }: Props) {
       setCategory(editing.category);
       setAddress(editing.address || '');
       setDescription(editing.description || '');
+      setVisitedAt(formatDateForInput(editing.visitedAt));
+      setRating(editing.rating || 0);
+      setWouldReturn(editing.wouldReturn || false);
+      setSignatureDish(editing.signatureDish || '');
+      setTagsText((editing.tags || []).join(', '));
       setPriceMin(editing.priceMin?.toString() || '');
       setPriceMax(editing.priceMax?.toString() || '');
       setPriceLevel(editing.priceLevel || 0);
@@ -159,11 +179,77 @@ export default function AddRestaurantScreen({ route, navigation }: Props) {
     setLocationAddress('');
   };
 
+  const parseMoneyValue = (raw: string): number | undefined => {
+    const trimmed = raw.trim().replace(',', '.');
+    if (!trimmed) return undefined;
+    const parsed = Number(trimmed);
+    return Number.isFinite(parsed) ? parsed : NaN;
+  };
+
+  const parseVisitDate = (raw: string): string | undefined | null => {
+    const trimmed = raw.trim();
+    if (!trimmed) return undefined;
+
+    const normalized = trimmed.replace(/\./g, '/').replace(/-/g, '/');
+    const parts = normalized.split('/').map((part) => Number(part));
+
+    let year: number;
+    let month: number;
+    let day: number;
+
+    if (parts.length === 3 && String(parts[0]).length === 4) {
+      [year, month, day] = parts;
+    } else if (parts.length === 3) {
+      [day, month, year] = parts;
+    } else {
+      return null;
+    }
+
+    if (!year || !month || !day) return null;
+    const date = new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
+    if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) {
+      return null;
+    }
+
+    return date.toISOString();
+  };
+
   const handleSave = async () => {
     if (!name.trim()) {
       Alert.alert('Nom requis', 'Le nom du restaurant est obligatoire.');
       return;
     }
+
+    const parsedPriceMin = parseMoneyValue(priceMin);
+    const parsedPriceMax = parseMoneyValue(priceMax);
+
+    if (Number.isNaN(parsedPriceMin) || Number.isNaN(parsedPriceMax)) {
+      Alert.alert('Prix invalide', 'Utilisez uniquement des nombres pour le budget.');
+      return;
+    }
+
+    if ((parsedPriceMin ?? 0) < 0 || (parsedPriceMax ?? 0) < 0) {
+      Alert.alert('Prix invalide', 'Le budget ne peut pas être négatif.');
+      return;
+    }
+
+    if (parsedPriceMin != null && parsedPriceMax != null && parsedPriceMin > parsedPriceMax) {
+      Alert.alert('Budget incohérent', 'Le prix minimum doit être inférieur ou égal au prix maximum.');
+      return;
+    }
+
+    const parsedVisitedAt = parseVisitDate(visitedAt);
+    if (parsedVisitedAt === null) {
+      Alert.alert('Date invalide', 'Utilisez le format JJ/MM/AAAA ou AAAA-MM-JJ.');
+      return;
+    }
+
+    const tags = tagsText
+      .split(',')
+      .map((tag) => tag.trim())
+      .filter(Boolean)
+      .slice(0, 8);
+
     setSaving(true);
     try {
       const now = new Date().toISOString();
@@ -173,8 +259,13 @@ export default function AddRestaurantScreen({ route, navigation }: Props) {
         category,
         address: address.trim() || undefined,
         description: description.trim() || undefined,
-        priceMin: priceMin ? parseFloat(priceMin) : undefined,
-        priceMax: priceMax ? parseFloat(priceMax) : undefined,
+        visitedAt: parsedVisitedAt,
+        rating: rating || undefined,
+        wouldReturn: wouldReturn || undefined,
+        signatureDish: signatureDish.trim() || undefined,
+        tags,
+        priceMin: parsedPriceMin,
+        priceMax: parsedPriceMax,
         priceLevel: priceLevel || undefined,
         images,
         location:
@@ -386,6 +477,92 @@ export default function AddRestaurantScreen({ route, navigation }: Props) {
             })}
           </View>
 
+          {/* Visit Journal */}
+          <Text style={[styles.sectionTitle, { color: colors.textPrimary, marginTop: Spacing.xxl }]}>Votre passage</Text>
+
+          <Text style={[styles.label, { color: colors.textSecondary }]}>Note personnelle</Text>
+          <View style={styles.ratingRow}>
+            {[1, 2, 3, 4, 5].map((value) => {
+              const selected = rating >= value;
+              return (
+                <TouchableOpacity
+                  key={value}
+                  activeOpacity={0.85}
+                  style={[
+                    styles.ratingBtn,
+                    { backgroundColor: selected ? colors.warning + '20' : colors.surface, borderColor: selected ? colors.warning + '70' : colors.border },
+                    Shadows.sm,
+                  ]}
+                  onPress={() => setRating(rating === value ? 0 : value)}
+                >
+                  <Star size={22} color={selected ? colors.warning : colors.textMuted} fill={selected ? colors.warning : 'transparent'} />
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          <View style={styles.visitGrid}>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.label, { color: colors.textSecondary }]}>Date de passage</Text>
+              <View style={[inputContainerStyle, styles.iconInputContainer]}>
+                <Calendar size={18} color={colors.textMuted} style={{ marginRight: 8 }} />
+                <TextInput
+                  style={[styles.input, { color: colors.textPrimary, flex: 1 }]}
+                  value={visitedAt}
+                  onChangeText={setVisitedAt}
+                  placeholder="JJ/MM/AAAA"
+                  placeholderTextColor={colors.textMuted}
+                  keyboardType="numbers-and-punctuation"
+                  selectionColor={colors.primary}
+                />
+              </View>
+            </View>
+
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.label, { color: colors.textSecondary }]}>À refaire</Text>
+              <TouchableOpacity
+                activeOpacity={0.85}
+                style={[
+                  styles.returnBtn,
+                  { backgroundColor: wouldReturn ? colors.success + '18' : colors.surface, borderColor: wouldReturn ? colors.success + '55' : colors.border },
+                  Shadows.sm,
+                ]}
+                onPress={() => setWouldReturn((prev) => !prev)}
+              >
+                <Heart size={18} color={wouldReturn ? colors.success : colors.textMuted} fill={wouldReturn ? colors.success : 'transparent'} />
+                <Text style={[styles.returnText, { color: wouldReturn ? colors.success : colors.textSecondary }]}>
+                  {wouldReturn ? 'Oui' : 'Non'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          <Text style={[styles.label, { color: colors.textSecondary }]}>Plat à retenir</Text>
+          <View style={[inputContainerStyle, styles.iconInputContainer]}>
+            <Star size={18} color={colors.textMuted} style={{ marginRight: 8 }} />
+            <TextInput
+              style={[styles.input, { color: colors.textPrimary, flex: 1 }]}
+              value={signatureDish}
+              onChangeText={setSignatureDish}
+              placeholder="Ex: ramen spicy, tiramisu maison..."
+              placeholderTextColor={colors.textMuted}
+              selectionColor={colors.primary}
+            />
+          </View>
+
+          <Text style={[styles.label, { color: colors.textSecondary }]}>Tags</Text>
+          <View style={[inputContainerStyle, styles.iconInputContainer]}>
+            <Tag size={18} color={colors.textMuted} style={{ marginRight: 8 }} />
+            <TextInput
+              style={[styles.input, { color: colors.textPrimary, flex: 1 }]}
+              value={tagsText}
+              onChangeText={setTagsText}
+              placeholder="terrasse, date, solo..."
+              placeholderTextColor={colors.textMuted}
+              selectionColor={colors.primary}
+            />
+          </View>
+
           {/* Description */}
           <Text style={[styles.label, { color: colors.textSecondary }]}>Description & Avis</Text>
           <View style={[inputContainerStyle, styles.multilineContainer]}>
@@ -525,6 +702,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 1,
   },
+  iconInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
   input: {
     fontSize: FontSize.md,
     fontFamily: FontFamily.medium,
@@ -604,6 +785,36 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   priceLevelText: {
+    fontSize: FontSize.md,
+    fontFamily: FontFamily.bold,
+  },
+  ratingRow: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
+    marginBottom: Spacing.sm,
+  },
+  ratingBtn: {
+    flex: 1,
+    height: 52,
+    borderRadius: BorderRadius.xl,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  visitGrid: {
+    flexDirection: 'row',
+    gap: Spacing.md,
+  },
+  returnBtn: {
+    height: 56,
+    borderRadius: BorderRadius.xl,
+    borderWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.sm,
+  },
+  returnText: {
     fontSize: FontSize.md,
     fontFamily: FontFamily.bold,
   },
