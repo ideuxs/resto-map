@@ -1,479 +1,404 @@
-import React, { useState, useCallback } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  View,
-  Text,
-  FlatList,
-  TouchableOpacity,
+  ActivityIndicator,
+  Alert,
+  Modal,
+  Pressable,
+  SectionList,
   StyleSheet,
-  StatusBar,
+  Text,
   TextInput,
+  View,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { Search, Plus, LibraryBig, Folder, Download, ArrowDownAZ, Clock3 } from 'lucide-react-native';
-import { BlurView } from 'expo-blur';
+import {
+  BookMarked,
+  Check,
+  ChevronRight,
+  Download,
+  Eye,
+  EyeOff,
+  GitMerge,
+  Monitor,
+  Moon,
+  Search,
+  Sun,
+  UsersRound,
+  X,
+} from 'lucide-react-native';
 import * as Clipboard from 'expo-clipboard';
-import { decode } from 'base-64';
-import { Alert } from 'react-native';
 import * as Linking from 'expo-linking';
+import { Image } from 'expo-image';
+import { decode } from 'base-64';
 import LZString from 'lz-string';
-
-import { Collection, CollectionsStackParamList } from '../types';
-import { addCollectionsChangeListener, addRestaurantsChangeListener, getCollections, saveCollection, importSharedCollection } from '../storage/storage';
-import CollectionFormModal from '../components/CollectionFormModal';
-import EmptyState from '../components/EmptyState';
-import { useTheme } from '../theme/ThemeProvider';
-import { Spacing, BorderRadius, FontSize, FontFamily, Shadows } from '../constants/theme';
 import { v4 as uuidv4 } from 'uuid';
 
+import { Collection, CollectionsStackParamList } from '../types';
 import {
-  Star,
-  Heart,
-  Flame,
-  Pizza,
-  Utensils,
-  MapPin,
-  Coffee,
-  Beer,
-  Cake,
-  Gem,
-  Target,
-  Globe,
-  Camera,
-  Music
-} from 'lucide-react-native';
-
-const ICONS: Record<string, any> = {
-  Folder,
-  Star,
-  Heart,
-  Flame,
-  Pizza,
-  Utensils,
-  MapPin,
-  Coffee,
-  Beer,
-  Cake,
-  Gem,
-  Target,
-  Globe,
-  Camera,
-  Music
-};
+  addCollectionsChangeListener,
+  getCollections,
+  getDuplicateReviews,
+  getSharedCollectionPreview,
+  importSharedCollectionDetailed,
+  saveCollection,
+  setCollectionVisibility,
+} from '../storage/storage';
+import CollectionFormModal from '../components/CollectionFormModal';
+import EmptyState from '../components/EmptyState';
+import ScreenHeader from '../components/ScreenHeader';
+import { getCollectionIcon } from '../constants/collectionIcons';
+import { useTheme } from '../theme/ThemeProvider';
+import {
+  BorderRadius,
+  FontFamily,
+  FontSize,
+  getSourceColor,
+  isSourceColorKey,
+  sourceColorKeyFor,
+  Shadows,
+  Spacing,
+} from '../constants/theme';
 
 type Props = NativeStackScreenProps<CollectionsStackParamList, 'CollectionsList'>;
 
+const APPEARANCE_OPTIONS = [
+  { value: 'system', label: 'Système', icon: Monitor },
+  { value: 'light', label: 'Clair', icon: Sun },
+  { value: 'dark', label: 'Sombre', icon: Moon },
+] as const;
+
+function parseSharedText(text: string): any | null {
+  const parsed = Linking.parse(text);
+  const compact = typeof parsed.queryParams?.s === 'string' ? parsed.queryParams.s : null;
+  const v2 = typeof parsed.queryParams?.v2 === 'string' ? parsed.queryParams.v2 : null;
+  const v1 = typeof parsed.queryParams?.data === 'string' ? parsed.queryParams.data : null;
+  if (compact || v2) {
+    const json = LZString.decompressFromEncodedURIComponent(compact || v2 || '');
+    return json ? JSON.parse(json) : null;
+  }
+  if (v1) return JSON.parse(decode(v1));
+  const decompressed = LZString.decompressFromEncodedURIComponent(text);
+  if (decompressed) return JSON.parse(decompressed);
+  return JSON.parse(decode(text));
+}
+
 export default function CollectionsListScreen({ navigation }: Props) {
-  const { colors, isDark } = useTheme();
-  const [collections, setCollections] = useState<Collection[]>([]);
-  const [modalVisible, setModalVisible] = useState(false);
-  const [editingCollection, setEditingCollection] = useState<Collection | null>(null);
-  const [search, setSearch] = useState('');
-  const [sortBy, setSortBy] = useState<'recent' | 'name'>('recent');
+  const { colors, colorScheme, isDark, setTheme } = useTheme();
   const insets = useSafeAreaInsets();
+  const [collections, setCollections] = useState<Collection[]>([]);
+  const [query, setQuery] = useState('');
+  const [formOpen, setFormOpen] = useState(false);
+  const [appearanceOpen, setAppearanceOpen] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [duplicateCount, setDuplicateCount] = useState(0);
 
-  const loadCollections = useCallback(() => {
-    getCollections().then(setCollections);
+  const load = useCallback(() => {
+    void Promise.all([getCollections(), getDuplicateReviews()]).then(([nextCollections, reviews]) => {
+      setCollections(nextCollections);
+      setDuplicateCount(reviews.length);
+    });
   }, []);
+  useFocusEffect(useCallback(() => { load(); }, [load]));
+  useEffect(() => addCollectionsChangeListener(load), [load]);
 
-  useFocusEffect(
-    useCallback(() => {
-      loadCollections();
-    }, [loadCollections])
-  );
+  const filtered = useMemo(() => {
+    const normalized = query.trim().toLocaleLowerCase('fr');
+    return collections.filter((collection) =>
+      !normalized || collection.name.toLocaleLowerCase('fr').includes(normalized) ||
+      (collection.ownerName || '').toLocaleLowerCase('fr').includes(normalized)
+    );
+  }, [collections, query]);
 
-  React.useEffect(() => {
-    const unsubscribeCollections = addCollectionsChangeListener(loadCollections);
-    const unsubscribeRestaurants = addRestaurantsChangeListener(loadCollections);
-    return () => {
-      unsubscribeCollections();
-      unsubscribeRestaurants();
-    };
-  }, [loadCollections]);
+  const sections = [
+    { title: 'Mes listes', data: filtered.filter((collection) => collection.kind !== 'imported') },
+    { title: 'Listes importées', data: filtered.filter((collection) => collection.kind === 'imported') },
+  ].filter((section) => section.data.length > 0);
+  const currentAppearance = APPEARANCE_OPTIONS.find((option) => option.value === colorScheme) || APPEARANCE_OPTIONS[0];
+  const AppearanceIcon = currentAppearance.icon;
 
-  const handleSave = async (data: { name: string; emoji: string; description: string }) => {
-    const collection: Collection = {
-      id: editingCollection?.id || uuidv4(),
+  const createCollection = async (data: { name: string; emoji: string; description: string; imageUri?: string }) => {
+    await saveCollection({
+      id: uuidv4(),
       name: data.name,
       emoji: data.emoji,
       description: data.description || undefined,
-      restaurantIds: editingCollection?.restaurantIds || [],
-      createdAt: editingCollection?.createdAt || new Date().toISOString(),
-    };
-    await saveCollection(collection);
-    setModalVisible(false);
-    setEditingCollection(null);
-    loadCollections();
+      imageUri: data.imageUri,
+      restaurantIds: [],
+      kind: 'personal',
+      isVisible: true,
+      createdAt: new Date().toISOString(),
+    });
+    setFormOpen(false);
   };
 
-  const openCreate = () => {
-    setEditingCollection(null);
-    setModalVisible(true);
-  };
-
-  const handleManualImport = async () => {
+  const importFromClipboard = async () => {
+    if (importing) return;
     try {
       const text = await Clipboard.getStringAsync();
-      if (!text) {
-        Alert.alert('Presse-papier vide', 'Copiez un lien de partage ou le code de collection d\'abord.');
+      if (!text.trim()) {
+        Alert.alert('Presse-papier vide', 'Copiez d’abord un lien de partage RestoHub.');
         return;
       }
-
-      let sharedData: any = null;
-      const parsed = Linking.parse(text);
-      const sParam = typeof parsed.queryParams?.s === 'string' ? parsed.queryParams.s : null;
-      const v2Param = typeof parsed.queryParams?.v2 === 'string' ? parsed.queryParams.v2 : null;
-      const v1Param = typeof parsed.queryParams?.data === 'string' ? parsed.queryParams.data : null;
-
-      if (sParam) {
-        const json = LZString.decompressFromEncodedURIComponent(sParam);
-        sharedData = json ? JSON.parse(json) : null;
-      } else if (v2Param) {
-        const json = LZString.decompressFromEncodedURIComponent(v2Param);
-        sharedData = json ? JSON.parse(json) : null;
-      } else if (v1Param) {
-        sharedData = JSON.parse(decode(v1Param));
-      } else {
-        // Raw payload fallback (compressed JSON or base64 JSON)
-        try {
-          const maybeJson = LZString.decompressFromEncodedURIComponent(text);
-          if (maybeJson) {
-            sharedData = JSON.parse(maybeJson);
-          }
-        } catch {
-          // no-op
-        }
-        if (!sharedData) {
-          sharedData = JSON.parse(decode(text));
-        }
-      }
-
-      if (!sharedData) {
-        Alert.alert('Erreur', 'Lien ou code invalide.');
-        return;
-      }
-
-      let colName = 'Sans titre';
-      if (Array.isArray(sharedData)) {
-        colName = sharedData[2][0];
-      } else {
-        colName = sharedData.collection?.name || sharedData.c?.n || 'Sans titre';
-      }
-
+      const data = parseSharedText(text);
+      if (!data) throw new Error('Empty payload');
+      const preview = getSharedCollectionPreview(data);
       Alert.alert(
-        '📥 Importer une collection',
-        `Voulez-vous importer "${colName}" ?`,
+        'Importer cette liste ?',
+        `« ${preview.name} » de ${preview.ownerName} contient ${preview.count} adresse${preview.count !== 1 ? 's' : ''}.`,
         [
           { text: 'Annuler', style: 'cancel' },
-          { 
-            text: 'Importer', 
+          {
+            text: 'Importer',
             onPress: async () => {
-              await importSharedCollection(sharedData);
-              loadCollections();
-              Alert.alert('Succès', 'Collection importée avec succès !');
-            }
-          }
+              setImporting(true);
+              try {
+                const result = await importSharedCollectionDetailed(data);
+                if (result.ignored) {
+                  Alert.alert('Déjà à jour', 'Cette version de la liste est déjà importée.');
+                } else {
+                  Alert.alert(
+                    'Import terminé',
+                    `${result.added} nouvelle${result.added !== 1 ? 's' : ''} · ${result.linked} reliée${result.linked !== 1 ? 's' : ''} · ${result.needsReview} à vérifier.`
+                  );
+                }
+              } catch {
+                Alert.alert('Import impossible', 'Le contenu du partage est incomplet. Demandez un nouveau lien.');
+              } finally {
+                setImporting(false);
+              }
+            },
+          },
         ]
       );
-    } catch (e) {
-      Alert.alert('Erreur', 'Impossible de lire le code de partage.');
+    } catch {
+      Alert.alert('Aucun partage détecté', 'Copiez un lien RestoHub complet, puis réessayez.');
     }
   };
 
-  const normalizedSearch = search.toLowerCase().trim();
-  const visibleCollections = [...collections]
-    .filter((item) => {
-      if (!normalizedSearch) return true;
-      return (
-        item.name.toLowerCase().includes(normalizedSearch) ||
-        (item.description || '').toLowerCase().includes(normalizedSearch)
-      );
-    })
-    .sort((a, b) => {
-      if (sortBy === 'name') return a.name.localeCompare(b.name, 'fr');
-      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-    });
-
-  const renderItem = ({ item }: { item: Collection }) => {
-    const IconComp = ICONS[item.emoji || 'Folder'] || Folder;
-
+  const renderCollection = ({ item }: { item: Collection }) => {
+    const Icon = getCollectionIcon(item.emoji);
+    const imported = item.kind === 'imported';
+    const sourceColor = getSourceColor(
+      isSourceColorKey(item.sourceColorKey)
+        ? item.sourceColorKey
+        : sourceColorKeyFor(item.ownerId || item.ownerName || item.id),
+      isDark ? 'dark' : 'light'
+    );
     return (
-      <TouchableOpacity
-        style={[
-          styles.card,
-          { backgroundColor: colors.surface },
-          Shadows.md
-        ]}
+      <Pressable
         onPress={() => navigation.navigate('CollectionDetail', { collectionId: item.id })}
-        activeOpacity={0.8}
+        accessibilityRole="button"
+        style={({ pressed }) => [
+          styles.row,
+          Shadows.hard,
+          { backgroundColor: colors.surface, borderColor: colors.textPrimary, opacity: pressed ? 0.68 : 1 },
+        ]}
       >
-        <View style={[styles.iconContainer, { backgroundColor: colors.primary + '15' }]}>
-          <IconComp size={26} color={colors.primary} strokeWidth={2} />
+        <View style={[styles.iconBox, { backgroundColor: imported ? `${sourceColor}18` : colors.surfaceMuted }]}>
+          {item.imageUri ? <Image source={{ uri: item.imageUri }} style={styles.collectionImage} contentFit="cover" /> : <Icon size={23} color={imported ? sourceColor : colors.textPrimary} strokeWidth={2} />}
         </View>
-        <View style={styles.cardInfo}>
-          <Text style={[styles.cardName, { color: colors.textPrimary }]} numberOfLines={1}>{item.name}</Text>
-          {item.description ? (
-            <Text style={[styles.cardDesc, { color: colors.textSecondary }]} numberOfLines={1}>
-              {item.description}
-            </Text>
+        <View style={styles.rowContent}>
+          <Text style={[styles.rowTitle, { color: colors.textPrimary }]} numberOfLines={1}>{item.name}</Text>
+          {imported ? (
+            <View style={styles.ownerLine}>
+              <UsersRound size={13} color={sourceColor} />
+              <Text style={[styles.owner, { color: sourceColor }]} numberOfLines={1}>Liste de {item.ownerName || 'un ami'}</Text>
+            </View>
           ) : null}
-          <View style={[styles.countBadge, { backgroundColor: colors.background }]}>
-            <Text style={[styles.cardCount, { color: colors.textMuted }]}>
-              {item.restaurantIds.length} adresse{item.restaurantIds.length !== 1 ? 's' : ''}
-            </Text>
-          </View>
+          <Text style={[styles.rowMeta, { color: colors.textMuted }]}>
+            {item.restaurantIds.length} adresse{item.restaurantIds.length !== 1 ? 's' : ''}
+            {imported && item.isVisible === false ? ' · masquée' : ''}
+          </Text>
         </View>
-        <View style={styles.chevronBox}>
-          <Search size={20} color={colors.textMuted} strokeWidth={2.5} />
-        </View>
-      </TouchableOpacity>
+        {imported ? (
+          <Pressable
+            onPress={(event) => {
+              event.stopPropagation();
+              setCollectionVisibility(item.id, item.isVisible === false);
+            }}
+            accessibilityRole="switch"
+            accessibilityState={{ checked: item.isVisible !== false }}
+            accessibilityLabel={item.isVisible === false ? `Afficher ${item.name}` : `Masquer ${item.name}`}
+            style={({ pressed }) => [styles.eyeButton, { opacity: pressed ? 0.5 : 1 }]}
+          >
+            {item.isVisible === false
+              ? <EyeOff size={21} color={colors.textMuted} />
+              : <Eye size={21} color={sourceColor} />}
+          </Pressable>
+        ) : (
+          <ChevronRight size={19} color={colors.textMuted} />
+        )}
+      </Pressable>
     );
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.background} />
-
-      <BlurView
-        intensity={isDark ? 40 : 30}
-        tint={isDark ? "dark" : "light"}
-        style={[styles.header, { paddingTop: insets.top, height: insets.top + 216 }]}
-      >
-        <View style={{ flex: 1 }}>
-          <Text style={[styles.title, { color: colors.textPrimary }]}>Vos listes</Text>
-          <Text style={[styles.subtitle, { color: colors.textSecondary }]}>Organisez vos lieux favoris</Text>
-
-          <View style={[styles.searchWrap, { backgroundColor: colors.surface }]}>
-            <Search size={18} color={colors.textMuted} />
-            <TextInput
-              value={search}
-              onChangeText={setSearch}
-              placeholder="Rechercher une collection..."
-              placeholderTextColor={colors.textMuted}
-              style={[styles.searchInput, { color: colors.textPrimary }]}
-              selectionColor={colors.primary}
-            />
-          </View>
-
-          <View style={styles.sortRow}>
-            <TouchableOpacity
-              style={[
-                styles.sortBtn,
-                { backgroundColor: colors.surfaceLight },
-                sortBy === 'recent' && { backgroundColor: colors.primary + '20' }
-              ]}
-              onPress={() => setSortBy('recent')}
-            >
-              <Clock3 size={14} color={sortBy === 'recent' ? colors.primary : colors.textSecondary} />
-              <Text style={[styles.sortBtnText, { color: sortBy === 'recent' ? colors.primary : colors.textSecondary }]}>Récentes</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[
-                styles.sortBtn,
-                { backgroundColor: colors.surfaceLight },
-                sortBy === 'name' && { backgroundColor: colors.primary + '20' }
-              ]}
-              onPress={() => setSortBy('name')}
-            >
-              <ArrowDownAZ size={14} color={sortBy === 'name' ? colors.primary : colors.textSecondary} />
-              <Text style={[styles.sortBtnText, { color: sortBy === 'name' ? colors.primary : colors.textSecondary }]}>A-Z</Text>
-            </TouchableOpacity>
-            <Text style={[styles.resultText, { color: colors.textMuted }]}>
-              {visibleCollections.length} résultat{visibleCollections.length > 1 ? 's' : ''}
-            </Text>
-          </View>
-        </View>
-
-        <View style={{ flexDirection: 'row', gap: Spacing.sm }}>
-          <TouchableOpacity
-            style={[styles.importBtn, { backgroundColor: colors.surfaceLight }, Shadows.sm]}
-            onPress={handleManualImport}
-            activeOpacity={0.8}
-            accessibilityLabel="Importer depuis le presse-papier"
-          >
-            <Download size={20} color={colors.primary} strokeWidth={2.5} />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.addBtn, { backgroundColor: colors.primary }, Shadows.glow(colors.primary)]}
-            onPress={() => setModalVisible(true)}
-            activeOpacity={0.9}
-          >
-            <Plus size={20} color={colors.textOnPrimary} strokeWidth={2.5} style={{ marginRight: 4 }} />
-            <Text style={[styles.addBtnText, { color: colors.textOnPrimary }]}>Créer</Text>
-          </TouchableOpacity>
-        </View>
-      </BlurView>
-
-      <FlatList
-        data={visibleCollections}
+    <View style={[styles.screen, { backgroundColor: colors.background }]}>
+      <SectionList
+        sections={sections}
         keyExtractor={(item) => item.id}
-        renderItem={renderItem}
-        contentContainerStyle={[
-          visibleCollections.length === 0 ? styles.emptyContainer : styles.list,
-          { paddingTop: insets.top + 236, paddingBottom: insets.bottom + 100 }
-        ]}
-        ListEmptyComponent={
+        renderItem={renderCollection}
+        stickySectionHeadersEnabled={false}
+        renderSectionHeader={({ section }) => (
+          <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>{section.title}</Text>
+        )}
+        ListHeaderComponent={(
+          <View style={[styles.header, { paddingTop: insets.top + Spacing.lg }]}>
+            <ScreenHeader
+              title="Listes"
+              subtitle="Organisez vos repères et retrouvez les listes de vos proches."
+              onAdd={() => setFormOpen(true)}
+              addAccessibilityLabel="Créer une liste"
+            />
+
+            <View style={[styles.importLine, Shadows.hard, { backgroundColor: colors.surface, borderColor: colors.textPrimary }]}>
+              <View style={[styles.importIcon, { backgroundColor: `${colors.accentPink}16` }]}>
+                <Download size={18} color={colors.accentPink} />
+              </View>
+              <View style={styles.importCopy}>
+                <Text style={[styles.importTitle, { color: colors.textPrimary }]}>Importer une liste</Text>
+                <Text style={[styles.importSubtitle, { color: colors.textMuted }]}>Depuis un lien RestoHub copié.</Text>
+              </View>
+              <Pressable onPress={importFromClipboard} disabled={importing} style={({ pressed }) => [styles.importButton, { opacity: pressed ? 0.55 : 1 }]}>
+                {importing ? <ActivityIndicator size="small" color={colors.accentPink} /> : <Text style={[styles.importButtonText, { color: colors.accentPink }]}>Importer</Text>}
+              </Pressable>
+            </View>
+
+            <View style={[styles.search, { backgroundColor: colors.surface, borderColor: colors.textPrimary }]}>
+              <Search size={19} color={colors.textMuted} />
+              <TextInput
+                value={query}
+                onChangeText={setQuery}
+                placeholder="Rechercher une liste ou un ami"
+                placeholderTextColor={colors.textMuted}
+                selectionColor={colors.accent}
+                accessibilityLabel="Rechercher une liste"
+                style={[styles.searchInput, { color: colors.textPrimary }]}
+              />
+              {query ? <Pressable onPress={() => setQuery('')} hitSlop={10}><X size={18} color={colors.textMuted} /></Pressable> : null}
+            </View>
+
+            <Text style={[styles.toolsLabel, { color: colors.textPrimary }]}>Outils</Text>
+            <View style={[styles.toolsSection, Shadows.hard, { backgroundColor: colors.surface, borderColor: colors.textPrimary }]}>
+              <Pressable onPress={() => navigation.navigate('DuplicateReview')} style={({ pressed }) => [styles.utilityRow, { opacity: pressed ? 0.6 : 1 }]}>
+                <View style={[styles.toolIconBox, { backgroundColor: `${duplicateCount ? colors.accentPink : colors.textMuted}14` }]}><GitMerge size={19} color={duplicateCount ? colors.accentPink : colors.textMuted} /></View>
+                <View style={styles.utilityCopy}>
+                  <Text style={[styles.utilityTitle, { color: colors.textPrimary }]}>Doublons à vérifier</Text>
+                  <Text style={[styles.utilityDetail, { color: colors.textMuted }]}>{duplicateCount ? `${duplicateCount} rapprochement${duplicateCount > 1 ? 's' : ''} en attente` : 'Aucun rapprochement en attente'}</Text>
+                </View>
+                <ChevronRight size={19} color={colors.textMuted} />
+              </Pressable>
+              <Pressable onPress={() => setAppearanceOpen(true)} style={({ pressed }) => [styles.utilityRow, { opacity: pressed ? 0.6 : 1 }]} accessibilityRole="button">
+                <View style={[styles.toolIconBox, { backgroundColor: `${colors.accent}14` }]}><AppearanceIcon size={19} color={colors.accent} /></View>
+                <View style={styles.utilityCopy}>
+                  <Text style={[styles.utilityTitle, { color: colors.textPrimary }]}>Apparence</Text>
+                  <Text style={[styles.utilityDetail, { color: colors.textMuted }]}>{currentAppearance.label} · modifier</Text>
+                </View>
+                <ChevronRight size={19} color={colors.textMuted} />
+              </Pressable>
+            </View>
+          </View>
+        )}
+        ListEmptyComponent={(
           <EmptyState
-            icon={Folder}
-            title={collections.length === 0 ? 'Aucune collection' : 'Aucun résultat'}
-            subtitle={collections.length === 0
-              ? 'Créez des listes thématiques pour retrouver facilement vos meilleures adresses !'
-              : 'Aucune collection ne correspond à votre recherche.'}
+            icon={BookMarked}
+            title={collections.length ? 'Aucune liste trouvée' : 'Aucune liste pour l’instant'}
+            subtitle={collections.length ? 'Modifiez votre recherche.' : 'Créez une liste personnelle ou importez celle d’un ami.'}
+            actionLabel={collections.length ? 'Effacer la recherche' : 'Créer une liste'}
+            onAction={collections.length ? () => setQuery('') : () => setFormOpen(true)}
           />
-        }
+        )}
+        contentContainerStyle={{ paddingHorizontal: Spacing.lg, paddingBottom: insets.bottom + 96 }}
+        keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       />
-
-      <CollectionFormModal
-        visible={modalVisible}
-        collection={editingCollection}
-        onClose={() => {
-          setModalVisible(false);
-          setEditingCollection(null);
-        }}
-        onSave={handleSave}
-      />
+      <CollectionFormModal visible={formOpen} onClose={() => setFormOpen(false)} onSave={createCollection} />
+      <Modal visible={appearanceOpen} transparent={false} presentationStyle="fullScreen" animationType="slide" onRequestClose={() => setAppearanceOpen(false)}>
+        <View style={[styles.appearanceModalRoot, { backgroundColor: colors.surface }]}>
+          <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setAppearanceOpen(false)} />
+          <View style={[styles.appearanceSheet, Shadows.hard, { backgroundColor: colors.surface, borderColor: colors.textPrimary, paddingBottom: insets.bottom + Spacing.md }]}>
+            <View style={[styles.sheetHandle, { backgroundColor: colors.border }]} />
+            <View style={styles.appearanceSheetHeader}>
+              <View>
+                <Text style={[styles.sheetTitle, { color: colors.textPrimary }]}>Apparence</Text>
+                <Text style={[styles.sheetSubtitle, { color: colors.textMuted }]}>Choisissez le contraste qui vous convient.</Text>
+              </View>
+              <Pressable onPress={() => setAppearanceOpen(false)} style={styles.closeButton} accessibilityLabel="Fermer">
+                <X size={21} color={colors.textPrimary} />
+              </Pressable>
+            </View>
+            <View accessibilityRole="radiogroup">
+              {APPEARANCE_OPTIONS.map((option) => {
+                const selected = colorScheme === option.value;
+                const Icon = option.icon;
+                return (
+                  <Pressable
+                    key={option.value}
+                    onPress={() => { setTheme(option.value); setAppearanceOpen(false); }}
+                    accessibilityRole="radio"
+                    accessibilityState={{ checked: selected }}
+                    style={({ pressed }) => [
+                      styles.appearanceOption,
+                      Shadows.hard,
+                      {
+                        backgroundColor: selected ? colors.surfaceLight : colors.surface,
+                        borderColor: colors.textPrimary,
+                        opacity: pressed ? 0.62 : 1,
+                      },
+                    ]}
+                  >
+                    <Icon size={19} color={selected ? colors.accent : colors.textMuted} />
+                    <Text style={[styles.appearanceOptionText, { color: selected ? colors.accent : colors.textSecondary }]}>{option.label}</Text>
+                    {selected ? <Check size={20} color={colors.accent} strokeWidth={2.4} /> : null}
+                  </Pressable>
+                );
+              })}
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  header: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    zIndex: 10,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: Spacing.xl,
-    paddingBottom: Spacing.xl,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(150,150,150,0.2)',
-  },
-  title: {
-    fontSize: FontSize.title,
-    fontFamily: FontFamily.bold,
-    letterSpacing: -1,
-    marginBottom: 4,
-  },
-  subtitle: {
-    fontSize: FontSize.md,
-    fontFamily: FontFamily.medium,
-  },
-  searchWrap: {
-    marginTop: Spacing.md,
-    height: 44,
-    borderRadius: BorderRadius.full,
-    paddingHorizontal: Spacing.md,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: FontSize.sm,
-    fontFamily: FontFamily.medium,
-  },
-  sortRow: {
-    marginTop: Spacing.sm,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm,
-  },
-  sortBtn: {
-    height: 32,
-    borderRadius: BorderRadius.full,
-    paddingHorizontal: Spacing.md,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  sortBtnText: {
-    fontSize: FontSize.xs,
-    fontFamily: FontFamily.bold,
-  },
-  resultText: {
-    marginLeft: 'auto',
-    fontSize: FontSize.xs,
-    fontFamily: FontFamily.medium,
-  },
-  addBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.sm + 4,
-    borderRadius: BorderRadius.full,
-  },
-  addBtnText: {
-    fontSize: FontSize.sm,
-    fontFamily: FontFamily.bold,
-  },
-  importBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  list: {
-    paddingHorizontal: Spacing.xl,
-  },
-  emptyContainer: {
-    flexGrow: 1,
-  },
-  card: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: BorderRadius.xxl,
-    padding: Spacing.md,
-    marginBottom: Spacing.lg,
-  },
-  iconContainer: {
-    width: 64,
-    height: 64,
-    borderRadius: BorderRadius.xl,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: Spacing.lg,
-  },
-  cardInfo: {
-    flex: 1,
-    justifyContent: 'center',
-  },
-  cardName: {
-    fontSize: FontSize.lg,
-    fontFamily: FontFamily.bold,
-    marginBottom: 2,
-    letterSpacing: -0.2,
-  },
-  cardDesc: {
-    fontSize: FontSize.sm,
-    fontFamily: FontFamily.medium,
-    marginBottom: 6,
-  },
-  countBadge: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 4,
-    borderRadius: BorderRadius.sm,
-  },
-  cardCount: {
-    fontSize: FontSize.xs,
-    fontFamily: FontFamily.semiBold,
-  },
-  chevronBox: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: Spacing.sm,
-  },
+  screen: { flex: 1 },
+  header: { paddingBottom: Spacing.xl },
+  importLine: { minHeight: 76, marginTop: Spacing.xl, padding: Spacing.md, flexDirection: 'row', alignItems: 'center', gap: Spacing.md, borderWidth: 1.5, borderRadius: 12 },
+  importIcon: { width: 38, height: 38, alignItems: 'center', justifyContent: 'center', borderRadius: BorderRadius.md },
+  importCopy: { flex: 1 },
+  importTitle: { fontFamily: FontFamily.semiBold, fontSize: FontSize.md },
+  importSubtitle: { marginTop: 2, fontFamily: FontFamily.regular, fontSize: FontSize.xs },
+  importButton: { minHeight: 44, paddingHorizontal: Spacing.sm, flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
+  importButtonText: { fontFamily: FontFamily.semiBold, fontSize: FontSize.sm },
+  search: { minHeight: 52, marginTop: Spacing.xl, paddingHorizontal: Spacing.md, flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, borderWidth: 1.5, borderRadius: 10 },
+  searchInput: { flex: 1, minHeight: 46, fontFamily: FontFamily.regular, fontSize: FontSize.md },
+  toolsLabel: { marginTop: Spacing.xxxl, marginBottom: Spacing.sm, fontFamily: FontFamily.semiBold, fontSize: FontSize.lg },
+  toolsSection: { padding: Spacing.sm, borderWidth: 1.5, borderRadius: 12 },
+  utilityRow: { minHeight: 62, paddingHorizontal: Spacing.xs, flexDirection: 'row', alignItems: 'center', gap: Spacing.md, borderRadius: BorderRadius.lg },
+  toolIconBox: { width: 38, height: 38, alignItems: 'center', justifyContent: 'center', borderRadius: 12 },
+  utilityCopy: { flex: 1 },
+  utilityDetail: { fontFamily: FontFamily.regular, fontSize: FontSize.xs },
+  utilityTitle: { fontFamily: FontFamily.semiBold, fontSize: FontSize.sm },
+  appearanceOption: { minHeight: 54, marginBottom: Spacing.sm, paddingHorizontal: Spacing.md, flexDirection: 'row', alignItems: 'center', gap: Spacing.md, borderWidth: 1.5, borderRadius: 8 },
+  appearanceOptionText: { flex: 1, fontFamily: FontFamily.medium, fontSize: FontSize.sm },
+  sectionTitle: { marginTop: Spacing.xxl, marginBottom: Spacing.sm, fontFamily: FontFamily.semiBold, fontSize: FontSize.lg },
+  row: { minHeight: 80, marginBottom: Spacing.md, padding: Spacing.md, flexDirection: 'row', alignItems: 'center', gap: Spacing.md, borderWidth: 1.5, borderRadius: 12 },
+  iconBox: { width: 48, height: 48, alignItems: 'center', justifyContent: 'center', overflow: 'hidden', borderRadius: 14 },
+  collectionImage: { width: '100%', height: '100%' },
+  rowContent: { flex: 1, minWidth: 0 },
+  rowTitle: { fontFamily: FontFamily.semiBold, fontSize: FontSize.md },
+  ownerLine: { marginTop: 3, flexDirection: 'row', alignItems: 'center', gap: 5 },
+  owner: { flex: 1, fontFamily: FontFamily.medium, fontSize: FontSize.xs },
+  rowMeta: { marginTop: 4, fontFamily: FontFamily.regular, fontSize: FontSize.xs },
+  eyeButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  appearanceModalRoot: { flex: 1, justifyContent: 'flex-end' },
+  appearanceSheet: { paddingHorizontal: Spacing.xl, paddingTop: Spacing.sm, borderTopLeftRadius: 16, borderTopRightRadius: 16, borderWidth: 1.5 },
+  sheetHandle: { width: 36, height: 4, alignSelf: 'center', marginBottom: Spacing.md, borderRadius: BorderRadius.full },
+  appearanceSheetHeader: { minHeight: 54, marginBottom: Spacing.md, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: Spacing.md },
+  sheetTitle: { fontFamily: FontFamily.semiBold, fontSize: FontSize.xl },
+  sheetSubtitle: { marginTop: 3, fontFamily: FontFamily.regular, fontSize: FontSize.xs },
+  closeButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
 });

@@ -1,74 +1,51 @@
 {
   "expo": {
-<<<<<<< HEAD
-    "name": "resto-mapper",
-    "slug": "resto-mapper",
-    "version": "1.0.0",
-    "orientation": "portrait",
-    "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
-    "newArchEnabled": true,
-    "splash": {
-      "image": "./assets/splash-icon.png",
-=======
     "name": "RestoHub",
     "slug": "RestoHub",
     "version": "1.0.0",
     "scheme": "restohub",
-    "orientation": "portrait",
+    "orientation": "default",
     "icon": "./assets/rh.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
     "splash": {
       "image": "./assets/rh.png",
->>>>>>> master
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#F5EFF7"
     },
     "ios": {
-<<<<<<< HEAD
-      "supportsTablet": true
-    },
-    "android": {
-      "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
-      },
-      "edgeToEdgeEnabled": true
-=======
       "supportsTablet": true,
       "bundleIdentifier": "com.issamahamat.RestoHub"
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#F5EFF7",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false,
+      "edgeToEdgeEnabled": true,
+      "predictiveBackGestureEnabled": true,
       "permissions": [
         "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.ACCESS_FINE_LOCATION"
       ],
       "package": "com.issamahamat.RestoHub"
->>>>>>> master
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-<<<<<<< HEAD
-      "expo-sqlite"
-=======
+      "./plugins/withXcode26FmtFix",
       "expo-font",
       [
         "expo-location",
         {
-          "locationAlwaysAndWhenInUsePermission": "Permettre à RestoHub d'accéder à votre position pour localiser vos restaurants."
+          "locationAlwaysAndWhenInUsePermission": "RestoHub utilise votre position pour placer et retrouver vos adresses."
         }
       ],
-      "expo-asset"
->>>>>>> master
+      "expo-asset",
+      "expo-router"
     ]
   }
 }

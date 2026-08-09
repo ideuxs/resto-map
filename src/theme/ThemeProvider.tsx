@@ -3,7 +3,13 @@ import { useColorScheme as useDeviceColorScheme } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { lightColors, darkColors, ThemeColors } from '../constants/theme';
 
-type ColorScheme = 'light' | 'dark' | 'system';
+export type ColorScheme = 'light' | 'dark' | 'system';
+
+const COLOR_SCHEMES: ColorScheme[] = ['system', 'light', 'dark'];
+
+function isColorScheme(value: string): value is ColorScheme {
+  return COLOR_SCHEMES.includes(value as ColorScheme);
+}
 
 interface ThemeContextType {
   theme: 'light' | 'dark';
@@ -29,8 +35,8 @@ export const ThemeProvider = ({ children }: { children: React.ReactNode }) => {
   const loadTheme = async () => {
     try {
       const storedTheme = await AsyncStorage.getItem(THEME_STORAGE_KEY);
-      if (storedTheme) {
-        setColorScheme(storedTheme as ColorScheme);
+      if (storedTheme && isColorScheme(storedTheme)) {
+        setColorScheme(storedTheme);
       }
     } catch (e) {
       console.error('Erreur chargement thème', e);

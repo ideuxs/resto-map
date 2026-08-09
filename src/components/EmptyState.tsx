@@ -1,36 +1,36 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { LucideIcon } from 'lucide-react-native';
 import { useTheme } from '../theme/ThemeProvider';
-import { FontSize, FontFamily, Spacing, BorderRadius } from '../constants/theme';
+import { BorderRadius, FontFamily, FontSize, Shadows, Spacing } from '../constants/theme';
 
-interface Props {
+type Props = {
   icon: LucideIcon;
   title: string;
   subtitle?: string;
-  iconProps?: any;
-}
+  actionLabel?: string;
+  onAction?: () => void;
+};
 
-export default function EmptyState({ icon: Icon, title, subtitle, iconProps }: Props) {
-  const { colors, isDark } = useTheme();
-
+export default function EmptyState({ icon: Icon, title, subtitle, actionLabel, onAction }: Props) {
+  const { colors } = useTheme();
   return (
     <View style={styles.container}>
-      <View style={[styles.iconContainer, { backgroundColor: isDark ? 'rgba(99, 102, 241, 0.1)' : 'rgba(79, 70, 229, 0.05)' }]}>
-        <View style={[styles.iconInner, { backgroundColor: isDark ? 'rgba(99, 102, 241, 0.15)' : 'rgba(79, 70, 229, 0.1)' }]}>
-          <Icon 
-            size={42} 
-            color={colors.primary} 
-            strokeWidth={1.5} 
-            {...iconProps} 
-          />
-        </View>
-      </View>
+      <Icon size={34} color={colors.accent} strokeWidth={1.7} />
       <Text style={[styles.title, { color: colors.textPrimary }]}>{title}</Text>
-      {subtitle ? (
-        <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-          {subtitle}
-        </Text>
+      {subtitle ? <Text style={[styles.subtitle, { color: colors.textSecondary }]}>{subtitle}</Text> : null}
+      {actionLabel && onAction ? (
+        <Pressable
+          accessibilityRole="button"
+          onPress={onAction}
+          style={({ pressed }) => [
+            styles.action,
+            Shadows.hard,
+            { backgroundColor: colors.accentPink, borderColor: colors.textPrimary, borderWidth: 1.5, opacity: pressed ? 0.72 : 1 },
+          ]}
+        >
+          <Text style={[styles.actionText, { color: colors.textOnAccent }]}>{actionLabel}</Text>
+        </Pressable>
       ) : null}
     </View>
   );
@@ -38,38 +38,35 @@ export default function EmptyState({ icon: Icon, title, subtitle, iconProps }: P
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
+    flexGrow: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: Spacing.xxxl,
-    paddingTop: Spacing.xxxl * 2,
-  },
-  iconContainer: {
-    width: 120,
-    height: 120,
-    borderRadius: BorderRadius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: Spacing.xl,
-  },
-  iconInner: {
-    width: 80,
-    height: 80,
-    borderRadius: BorderRadius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
+    paddingHorizontal: Spacing.xxxl,
+    paddingVertical: 64,
   },
   title: {
-    fontSize: FontSize.xxl,
-    fontFamily: FontFamily.bold,
+    marginTop: Spacing.lg,
+    fontFamily: FontFamily.semiBold,
+    fontSize: FontSize.lg,
     textAlign: 'center',
-    marginBottom: Spacing.sm,
-    letterSpacing: -0.5,
   },
   subtitle: {
-    fontSize: FontSize.md,
-    fontFamily: FontFamily.medium,
+    marginTop: Spacing.sm,
+    maxWidth: 290,
+    fontFamily: FontFamily.regular,
+    fontSize: FontSize.sm,
+    lineHeight: 21,
     textAlign: 'center',
-    lineHeight: 24,
+  },
+  action: {
+    minHeight: 44,
+    marginTop: Spacing.xl,
+    paddingHorizontal: Spacing.xl,
+    borderRadius: 8,
+    justifyContent: 'center',
+  },
+  actionText: {
+    fontFamily: FontFamily.semiBold,
+    fontSize: FontSize.sm,
   },
 });
