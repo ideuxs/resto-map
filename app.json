@@ -37,7 +37,15 @@
     },
     "plugins": [
       "./plugins/withXcode26FmtFix",
-      "expo-font",
+      [
+        "expo-font",
+        {
+          "fonts": [
+            "./assets/fonts/FlaticonUIconsRegularRounded.ttf",
+            "./assets/fonts/FlaticonUIconsSolidRounded.ttf"
+          ]
+        }
+      ],
       [
         "expo-location",
         {

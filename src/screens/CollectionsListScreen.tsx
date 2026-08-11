@@ -2,12 +2,17 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  FlatList,
+  Keyboard,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
-  SectionList,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
@@ -27,7 +32,7 @@ import {
   Sun,
   UsersRound,
   X,
-} from 'lucide-react-native';
+} from '../components/FlaticonIcon';
 import * as Clipboard from 'expo-clipboard';
 import * as Linking from 'expo-linking';
 import { Image } from 'expo-image';
@@ -46,6 +51,7 @@ import {
   setCollectionVisibility,
 } from '../storage/storage';
 import CollectionFormModal from '../components/CollectionFormModal';
+import CollectionCardPattern from '../components/CollectionCardPattern';
 import EmptyState from '../components/EmptyState';
 import ScreenHeader from '../components/ScreenHeader';
 import { getCollectionIcon } from '../constants/collectionIcons';
@@ -84,9 +90,17 @@ function parseSharedText(text: string): any | null {
   return JSON.parse(decode(text));
 }
 
+function formatImportedAt(value?: string): string | null {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return `Importée le ${date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}`;
+}
+
 export default function CollectionsListScreen({ navigation }: Props) {
   const { colors, colorScheme, isDark, setTheme } = useTheme();
   const insets = useSafeAreaInsets();
+  const { width: windowWidth } = useWindowDimensions();
   const [collections, setCollections] = useState<Collection[]>([]);
   const [query, setQuery] = useState('');
   const [formOpen, setFormOpen] = useState(false);
@@ -111,10 +125,9 @@ export default function CollectionsListScreen({ navigation }: Props) {
     );
   }, [collections, query]);
 
-  const sections = [
-    { title: 'Mes listes', data: filtered.filter((collection) => collection.kind !== 'imported') },
-    { title: 'Listes importées', data: filtered.filter((collection) => collection.kind === 'imported') },
-  ].filter((section) => section.data.length > 0);
+  const personalCollections = filtered.filter((collection) => collection.kind !== 'imported');
+  const importedCollections = filtered.filter((collection) => collection.kind === 'imported');
+  const collectionCardWidth = Math.min(292, Math.max(238, Math.round(windowWidth * 0.7)));
   const currentAppearance = APPEARANCE_OPTIONS.find((option) => option.value === colorScheme) || APPEARANCE_OPTIONS[0];
   const AppearanceIcon = currentAppearance.icon;
 
@@ -177,9 +190,12 @@ export default function CollectionsListScreen({ navigation }: Props) {
     }
   };
 
-  const renderCollection = ({ item }: { item: Collection }) => {
+  const renderCollectionCard = ({ item }: { item: Collection }) => {
     const Icon = getCollectionIcon(item.emoji);
     const imported = item.kind === 'imported';
+    const ownerName = item.ownerName || 'un ami';
+    const importedAt = imported ? formatImportedAt(item.importedAt) : null;
+    const addressCount = `${item.restaurantIds.length} adresse${item.restaurantIds.length !== 1 ? 's' : ''}`;
     const sourceColor = getSourceColor(
       isSourceColorKey(item.sourceColorKey)
         ? item.sourceColorKey
@@ -190,62 +206,96 @@ export default function CollectionsListScreen({ navigation }: Props) {
       <Pressable
         onPress={() => navigation.navigate('CollectionDetail', { collectionId: item.id })}
         accessibilityRole="button"
+        accessibilityLabel={imported ? `${item.name}, partagée par ${ownerName}, ${addressCount}` : `${item.name}, ${addressCount}`}
         style={({ pressed }) => [
-          styles.row,
-          Shadows.hard,
-          { backgroundColor: colors.surface, borderColor: colors.textPrimary, opacity: pressed ? 0.68 : 1 },
+          styles.collectionCard,
+          imported ? Shadows.surface : Shadows.hard,
+          {
+            width: collectionCardWidth,
+            backgroundColor: colors.surface,
+            borderColor: imported ? sourceColor : colors.textPrimary,
+            opacity: pressed ? 0.72 : 1,
+          },
         ]}
       >
-        <View style={[styles.iconBox, { backgroundColor: imported ? `${sourceColor}18` : colors.surfaceMuted }]}>
-          {item.imageUri ? <Image source={{ uri: item.imageUri }} style={styles.collectionImage} contentFit="cover" /> : <Icon size={23} color={imported ? sourceColor : colors.textPrimary} strokeWidth={2} />}
-        </View>
-        <View style={styles.rowContent}>
-          <Text style={[styles.rowTitle, { color: colors.textPrimary }]} numberOfLines={1}>{item.name}</Text>
+        <CollectionCardPattern icon={Icon} color={imported ? sourceColor : colors.accent} />
+        <View style={styles.cardTopRow}>
+          <View style={[styles.iconBox, { backgroundColor: imported ? `${sourceColor}18` : colors.surfaceMuted, borderColor: imported ? sourceColor : colors.textPrimary }]}>
+            {item.imageUri ? <Image source={{ uri: item.imageUri }} style={styles.collectionImage} contentFit="cover" /> : <Icon size={28} color={imported ? sourceColor : colors.textPrimary} strokeWidth={2} />}
+          </View>
           {imported ? (
-            <View style={styles.ownerLine}>
-              <UsersRound size={13} color={sourceColor} />
-              <Text style={[styles.owner, { color: sourceColor }]} numberOfLines={1}>Liste de {item.ownerName || 'un ami'}</Text>
-            </View>
-          ) : null}
-          <Text style={[styles.rowMeta, { color: colors.textMuted }]}>
-            {item.restaurantIds.length} adresse{item.restaurantIds.length !== 1 ? 's' : ''}
-            {imported && item.isVisible === false ? ' · masquée' : ''}
-          </Text>
+            <Pressable
+              onPress={(event) => {
+                event.stopPropagation();
+                setCollectionVisibility(item.id, item.isVisible === false);
+              }}
+              accessibilityRole="switch"
+              accessibilityState={{ checked: item.isVisible !== false }}
+              accessibilityLabel={item.isVisible === false ? `Afficher ${item.name}` : `Masquer ${item.name}`}
+              style={({ pressed }) => [styles.eyeButton, { opacity: pressed ? 0.5 : 1 }]}
+            >
+              {item.isVisible === false
+                ? <EyeOff size={21} color={colors.textMuted} />
+                : <Eye size={21} color={sourceColor} />}
+            </Pressable>
+          ) : <ChevronRight size={21} color={colors.textMuted} />}
         </View>
+        <Text style={[styles.cardTitle, { color: colors.textPrimary }]} numberOfLines={2}>{item.name}</Text>
         {imported ? (
-          <Pressable
-            onPress={(event) => {
-              event.stopPropagation();
-              setCollectionVisibility(item.id, item.isVisible === false);
-            }}
-            accessibilityRole="switch"
-            accessibilityState={{ checked: item.isVisible !== false }}
-            accessibilityLabel={item.isVisible === false ? `Afficher ${item.name}` : `Masquer ${item.name}`}
-            style={({ pressed }) => [styles.eyeButton, { opacity: pressed ? 0.5 : 1 }]}
-          >
-            {item.isVisible === false
-              ? <EyeOff size={21} color={colors.textMuted} />
-              : <Eye size={21} color={sourceColor} />}
-          </Pressable>
+          <View style={styles.ownerLine}>
+            <UsersRound size={14} color={sourceColor} />
+            <Text style={[styles.owner, { color: sourceColor }]} numberOfLines={1}>Partagée par {ownerName}</Text>
+          </View>
         ) : (
-          <ChevronRight size={19} color={colors.textMuted} />
+          <Text style={[styles.personalLabel, { color: colors.textMuted }]}>Ma liste</Text>
         )}
+        <View style={styles.cardMetaRow}>
+          <Text style={[styles.rowMeta, { color: colors.textMuted }]}>
+            {addressCount}{imported && item.isVisible === false ? ' · masquée' : ''}
+          </Text>
+          {importedAt ? <Text style={[styles.cardDate, { color: colors.textMuted }]}>{importedAt}</Text> : null}
+        </View>
       </Pressable>
     );
   };
 
+  const renderCarousel = (title: string, data: Collection[], imported = false) => {
+    if (!data.length) return null;
+    return (
+      <View style={[styles.collectionSection, imported ? styles.importedSection : undefined]}>
+        <View style={styles.sectionHeaderRow}>
+          <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>{title}</Text>
+          <Text style={[styles.sectionCount, { color: colors.textMuted }]}>{data.length} liste{data.length !== 1 ? 's' : ''}</Text>
+        </View>
+        {imported ? <Text style={[styles.sectionSubtitle, { color: colors.textSecondary }]}>Les listes reçues de vos proches</Text> : null}
+        <FlatList
+          data={data}
+          horizontal
+          keyExtractor={(item) => item.id}
+          renderItem={renderCollectionCard}
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.carouselContent}
+          ItemSeparatorComponent={() => <View style={styles.carouselGap} />}
+          snapToInterval={collectionCardWidth + Spacing.md}
+          snapToAlignment="start"
+          decelerationRate="fast"
+          nestedScrollEnabled
+          accessibilityLabel={title}
+        />
+      </View>
+    );
+  };
+
   return (
-    <View style={[styles.screen, { backgroundColor: colors.background }]}>
-      <SectionList
-        sections={sections}
-        keyExtractor={(item) => item.id}
-        renderItem={renderCollection}
-        stickySectionHeadersEnabled={false}
-        renderSectionHeader={({ section }) => (
-          <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>{section.title}</Text>
-        )}
-        ListHeaderComponent={(
-          <View style={[styles.header, { paddingTop: insets.top + Spacing.lg }]}>
+    <KeyboardAvoidingView style={[styles.screen, { backgroundColor: colors.background }]} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <ScrollView
+        contentContainerStyle={[styles.content, { paddingTop: insets.top + Spacing.lg, paddingBottom: insets.bottom + 96 }]}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+        automaticallyAdjustKeyboardInsets
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.header}>
             <ScreenHeader
               title="Listes"
               subtitle="Organisez vos repères et retrouvez les listes de vos proches."
@@ -271,6 +321,9 @@ export default function CollectionsListScreen({ navigation }: Props) {
               <TextInput
                 value={query}
                 onChangeText={setQuery}
+                onSubmitEditing={Keyboard.dismiss}
+                returnKeyType="search"
+                blurOnSubmit
                 placeholder="Rechercher une liste ou un ami"
                 placeholderTextColor={colors.textMuted}
                 selectionColor={colors.accent}
@@ -299,9 +352,12 @@ export default function CollectionsListScreen({ navigation }: Props) {
                 <ChevronRight size={19} color={colors.textMuted} />
               </Pressable>
             </View>
-          </View>
-        )}
-        ListEmptyComponent={(
+        </View>
+
+        {renderCarousel('Mes listes', personalCollections)}
+        {renderCarousel('Listes importées', importedCollections, true)}
+
+        {!filtered.length ? (
           <EmptyState
             icon={BookMarked}
             title={collections.length ? 'Aucune liste trouvée' : 'Aucune liste pour l’instant'}
@@ -309,16 +365,13 @@ export default function CollectionsListScreen({ navigation }: Props) {
             actionLabel={collections.length ? 'Effacer la recherche' : 'Créer une liste'}
             onAction={collections.length ? () => setQuery('') : () => setFormOpen(true)}
           />
-        )}
-        contentContainerStyle={{ paddingHorizontal: Spacing.lg, paddingBottom: insets.bottom + 96 }}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-      />
+        ) : null}
+      </ScrollView>
       <CollectionFormModal visible={formOpen} onClose={() => setFormOpen(false)} onSave={createCollection} />
-      <Modal visible={appearanceOpen} transparent={false} presentationStyle="fullScreen" animationType="slide" onRequestClose={() => setAppearanceOpen(false)}>
+      <Modal visible={appearanceOpen} transparent={false} presentationStyle="fullScreen" animationType="slide" statusBarTranslucent onRequestClose={() => setAppearanceOpen(false)}>
         <View style={[styles.appearanceModalRoot, { backgroundColor: colors.surface }]}>
           <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setAppearanceOpen(false)} />
-          <View style={[styles.appearanceSheet, Shadows.hard, { backgroundColor: colors.surface, borderColor: colors.textPrimary, paddingBottom: insets.bottom + Spacing.md }]}>
+          <View style={[styles.appearanceSheet, Shadows.sheet, { backgroundColor: colors.surface, borderColor: colors.textPrimary, paddingBottom: insets.bottom + Spacing.md }]}>
             <View style={[styles.sheetHandle, { backgroundColor: colors.border }]} />
             <View style={styles.appearanceSheetHeader}>
               <View>
@@ -357,14 +410,22 @@ export default function CollectionsListScreen({ navigation }: Props) {
               })}
             </View>
           </View>
+          <View
+            pointerEvents="none"
+            style={[
+              styles.bottomSafeAreaFill,
+              { height: insets.bottom + 2, backgroundColor: colors.surface },
+            ]}
+          />
         </View>
       </Modal>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
   screen: { flex: 1 },
+  content: { paddingHorizontal: Spacing.lg },
   header: { paddingBottom: Spacing.xl },
   importLine: { minHeight: 76, marginTop: Spacing.xl, padding: Spacing.md, flexDirection: 'row', alignItems: 'center', gap: Spacing.md, borderWidth: 1.5, borderRadius: 12 },
   importIcon: { width: 38, height: 38, alignItems: 'center', justifyContent: 'center', borderRadius: BorderRadius.md },
@@ -384,17 +445,28 @@ const styles = StyleSheet.create({
   utilityTitle: { fontFamily: FontFamily.semiBold, fontSize: FontSize.sm },
   appearanceOption: { minHeight: 54, marginBottom: Spacing.sm, paddingHorizontal: Spacing.md, flexDirection: 'row', alignItems: 'center', gap: Spacing.md, borderWidth: 1.5, borderRadius: 8 },
   appearanceOptionText: { flex: 1, fontFamily: FontFamily.medium, fontSize: FontSize.sm },
-  sectionTitle: { marginTop: Spacing.xxl, marginBottom: Spacing.sm, fontFamily: FontFamily.semiBold, fontSize: FontSize.lg },
-  row: { minHeight: 80, marginBottom: Spacing.md, padding: Spacing.md, flexDirection: 'row', alignItems: 'center', gap: Spacing.md, borderWidth: 1.5, borderRadius: 12 },
-  iconBox: { width: 48, height: 48, alignItems: 'center', justifyContent: 'center', overflow: 'hidden', borderRadius: 14 },
+  collectionSection: { marginTop: Spacing.xxl },
+  importedSection: { marginTop: Spacing.xxxl },
+  sectionHeaderRow: { minHeight: 28, flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: Spacing.md },
+  sectionTitle: { fontFamily: FontFamily.semiBold, fontSize: FontSize.lg },
+  sectionCount: { fontFamily: FontFamily.medium, fontSize: FontSize.xs },
+  sectionSubtitle: { marginTop: 2, fontFamily: FontFamily.regular, fontSize: FontSize.xs },
+  carouselContent: { paddingTop: Spacing.md, paddingBottom: Spacing.lg },
+  carouselGap: { width: Spacing.md },
+  collectionCard: { minHeight: 176, padding: Spacing.md, borderWidth: 1.5, borderRadius: 14 },
+  cardTopRow: { minHeight: 56, flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' },
+  iconBox: { width: 56, height: 56, alignItems: 'center', justifyContent: 'center', overflow: 'hidden', borderWidth: 1.5, borderRadius: 14 },
   collectionImage: { width: '100%', height: '100%' },
-  rowContent: { flex: 1, minWidth: 0 },
-  rowTitle: { fontFamily: FontFamily.semiBold, fontSize: FontSize.md },
-  ownerLine: { marginTop: 3, flexDirection: 'row', alignItems: 'center', gap: 5 },
+  cardTitle: { marginTop: Spacing.md, fontFamily: FontFamily.semiBold, fontSize: FontSize.lg, lineHeight: 24 },
+  personalLabel: { marginTop: 4, fontFamily: FontFamily.medium, fontSize: FontSize.xs },
+  ownerLine: { marginTop: 5, flexDirection: 'row', alignItems: 'center', gap: 5 },
   owner: { flex: 1, fontFamily: FontFamily.medium, fontSize: FontSize.xs },
-  rowMeta: { marginTop: 4, fontFamily: FontFamily.regular, fontSize: FontSize.xs },
+  cardMetaRow: { marginTop: Spacing.md, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: Spacing.sm },
+  rowMeta: { fontFamily: FontFamily.regular, fontSize: FontSize.xs },
+  cardDate: { flexShrink: 1, fontFamily: FontFamily.regular, fontSize: FontSize.xs, textAlign: 'right' },
   eyeButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   appearanceModalRoot: { flex: 1, justifyContent: 'flex-end' },
+  bottomSafeAreaFill: { position: 'absolute', right: 0, bottom: 0, left: 0, zIndex: 20 },
   appearanceSheet: { paddingHorizontal: Spacing.xl, paddingTop: Spacing.sm, borderTopLeftRadius: 16, borderTopRightRadius: 16, borderWidth: 1.5 },
   sheetHandle: { width: 36, height: 4, alignSelf: 'center', marginBottom: Spacing.md, borderRadius: BorderRadius.full },
   appearanceSheetHeader: { minHeight: 54, marginBottom: Spacing.md, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: Spacing.md },

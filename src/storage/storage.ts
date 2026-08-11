@@ -841,3 +841,12 @@ export async function getLocalShareOwner(): Promise<{ id: string; displayName: s
   await AsyncStorage.setItem(SHARE_OWNER_KEY, JSON.stringify(owner));
   return owner;
 }
+
+export async function setLocalShareOwnerName(displayName: string): Promise<{ id: string; displayName: string }> {
+  const normalizedName = displayName.trim();
+  if (!normalizedName) throw new Error('Le prénom est requis.');
+  const owner = await getLocalShareOwner();
+  const nextOwner = { ...owner, displayName: normalizedName };
+  await AsyncStorage.setItem(SHARE_OWNER_KEY, JSON.stringify(nextOwner));
+  return nextOwner;
+}

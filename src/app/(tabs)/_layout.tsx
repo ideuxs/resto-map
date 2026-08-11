@@ -1,7 +1,8 @@
 import React from 'react';
 import { Platform } from 'react-native';
-import { Icon, Label, NativeTabs } from 'expo-router/unstable-native-tabs';
+import { Icon, Label, NativeTabs, VectorIcon } from 'expo-router/unstable-native-tabs';
 
+import { flaticonVectorFamily } from '../../components/FlaticonIcon';
 import { FontFamily } from '../../constants/theme';
 import { useTheme } from '../../theme/ThemeProvider';
 
@@ -23,19 +24,19 @@ export default function TabsLayout() {
       }}
     >
       <NativeTabs.Trigger name="restaurants">
-        <Icon sf={{ default: 'fork.knife', selected: 'fork.knife' }} />
+        <Icon src={<VectorIcon family={flaticonVectorFamily} name="utensils" />} />
         <Label>Restos</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="map">
-        <Icon sf={{ default: 'map', selected: 'map.fill' }} />
+        <Icon src={<VectorIcon family={flaticonVectorFamily} name="map" />} />
         <Label>Carte</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="collections">
-        <Icon sf={{ default: 'books.vertical', selected: 'books.vertical.fill' }} />
+        <Icon src={<VectorIcon family={flaticonVectorFamily} name="book-bookmark" />} />
         <Label>Listes</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="settings">
-        <Icon sf={{ default: 'gearshape', selected: 'gearshape.fill' }} />
+        <Icon src={<VectorIcon family={flaticonVectorFamily} name="settings-sliders" />} />
         <Label>Paramètres</Label>
       </NativeTabs.Trigger>
     </NativeTabs>

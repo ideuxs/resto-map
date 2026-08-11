@@ -102,6 +102,8 @@ export default function RootLayout() {
     Inter_500Medium,
     Inter_600SemiBold,
     Inter_700Bold,
+    FlaticonUIconsRegularRounded: require('../../assets/fonts/FlaticonUIconsRegularRounded.ttf'),
+    FlaticonUIconsSolidRounded: require('../../assets/fonts/FlaticonUIconsSolidRounded.ttf'),
   });
 
   if (!fontsLoaded) {

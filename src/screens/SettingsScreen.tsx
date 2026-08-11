@@ -8,7 +8,7 @@ import {
   Moon,
   ShieldCheck,
   Sun,
-} from 'lucide-react-native';
+} from '../components/FlaticonIcon';
 
 import ScreenHeader from '../components/ScreenHeader';
 import { ColorScheme, useTheme } from '../theme/ThemeProvider';

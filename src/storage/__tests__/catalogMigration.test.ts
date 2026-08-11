@@ -1,6 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   deleteCollection,
+  createSharedCollectionPayload,
+  getLocalShareOwner,
   getCollections,
   getDuplicateReviews,
   getRestaurants,
@@ -9,12 +11,27 @@ import {
   getDuplicateDecisions,
   resolveDuplicate,
   saveRestaurant,
+  saveCollection,
+  setLocalShareOwnerName,
   undoDuplicate,
 } from '../storage';
 
 describe('catalog migration', () => {
   beforeEach(async () => {
     await AsyncStorage.clear();
+  });
+
+  it('persists the sender display name for future share payloads', async () => {
+    await saveCollection({
+      id: 'paris', name: 'Paris', emoji: 'MapPinned', restaurantIds: [], kind: 'personal',
+      isVisible: true, createdAt: '2026-06-01T12:00:00.000Z',
+    });
+
+    const owner = await setLocalShareOwnerName('Camille');
+    expect(await getLocalShareOwner()).toEqual(owner);
+
+    const payload = await createSharedCollectionPayload('paris', owner);
+    expect(payload.owner).toEqual({ id: owner.id, displayName: 'Camille' });
   });
 
   it('migrates legacy records once and never turns an imported opinion into a visit', async () => {

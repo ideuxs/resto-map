@@ -2,21 +2,22 @@ import { RestaurantCategory } from '../types';
 import {
   Utensils,
   Sandwich,
+  Burger,
   Croissant,
   Coffee,
   Beer,
   Pizza,
-  Soup,
-  JapaneseYen,
-  Flame,
   Cake,
   Store,
-  LucideIcon
-} from 'lucide-react-native';
+  Sushi,
+  Kebab,
+  Noodles,
+  FlaticonIcon
+} from '../components/FlaticonIcon';
 
 export interface CategoryInfo {
   label: string;
-  icon: LucideIcon;
+  icon: FlaticonIcon;
   color: string;
   markerColor: string;
 }
@@ -33,6 +34,12 @@ export const CATEGORIES: Record<RestaurantCategory, CategoryInfo> = {
     icon: Sandwich,
     color: '#4947A8',
     markerColor: '#4947A8',
+  },
+  burger: {
+    label: 'Burger',
+    icon: Burger,
+    color: '#C35A26',
+    markerColor: '#C35A26',
   },
   boulangerie: {
     label: 'Boulangerie',
@@ -60,19 +67,19 @@ export const CATEGORIES: Record<RestaurantCategory, CategoryInfo> = {
   },
   asiatique: {
     label: 'Asiatique',
-    icon: Soup,
+    icon: Noodles,
     color: '#8E3478',
     markerColor: '#8E3478',
   },
   sushi: {
     label: 'Sushi',
-    icon: JapaneseYen,
+    icon: Sushi,
     color: '#C52B82',
     markerColor: '#C52B82',
   },
   kebab: {
     label: 'Kebab',
-    icon: Flame,
+    icon: Kebab,
     color: '#6A3894',
     markerColor: '#6A3894',
   },

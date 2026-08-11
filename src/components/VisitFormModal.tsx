@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react';
 import {
   Alert,
   Image,
+  Keyboard,
+  KeyboardAvoidingView,
   Modal,
   Platform,
   Pressable,
@@ -11,7 +13,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { CalendarDays, Camera, ChevronDown, ChevronUp, LockKeyhole, NotebookPen, Star, X } from 'lucide-react-native';
+import { CalendarDays, Camera, ChevronDown, ChevronUp, LockKeyhole, NotebookPen, Star, X } from './FlaticonIcon';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { v4 as uuidv4 } from 'uuid';
 import * as ImagePicker from 'expo-image-picker';
@@ -111,6 +113,7 @@ export default function VisitFormModal({ visible, placeId, visit, onClose }: Pro
 
   const addPhotos = async () => {
     if (imageUris.length >= 5) return;
+    Keyboard.dismiss();
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {
       Alert.alert('Photos non autorisées', 'Autorisez l’accès aux photos pour les joindre à cette visite privée.');
@@ -144,6 +147,7 @@ export default function VisitFormModal({ visible, placeId, visit, onClose }: Pro
 
   const submit = async () => {
     if (saving) return;
+    Keyboard.dismiss();
     const visitedAt = parseInputDate(dateText);
     const normalizedAmount = amountText.trim().replace(',', '.');
     const amount = normalizedAmount ? Number(normalizedAmount) : undefined;
@@ -198,7 +202,10 @@ export default function VisitFormModal({ visible, placeId, visit, onClose }: Pro
       statusBarTranslucent
       onRequestClose={requestClose}
     >
-      <View style={[styles.modalRoot, { backgroundColor: colors.surface }]}>
+      <KeyboardAvoidingView
+        style={[styles.modalRoot, { backgroundColor: colors.surface }]}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
         <View
           style={[
             styles.sheet,
@@ -368,6 +375,9 @@ export default function VisitFormModal({ visible, placeId, visit, onClose }: Pro
                 <TextInput
                   value={dishesText}
                   onChangeText={(value) => { setDishesText(value); setDirty(true); }}
+                  onSubmitEditing={Keyboard.dismiss}
+                  returnKeyType="done"
+                  blurOnSubmit
                   placeholder="Ex. cookie miso, raviolis"
                   placeholderTextColor={colors.textMuted}
                   selectionColor={colors.accent}
@@ -384,6 +394,9 @@ export default function VisitFormModal({ visible, placeId, visit, onClose }: Pro
                     setAmountError('');
                     setDirty(true);
                   }}
+                  onSubmitEditing={Keyboard.dismiss}
+                  returnKeyType="done"
+                  blurOnSubmit
                   placeholder="0,00 €"
                   placeholderTextColor={colors.textMuted}
                   selectionColor={colors.accent}
@@ -400,6 +413,9 @@ export default function VisitFormModal({ visible, placeId, visit, onClose }: Pro
                 <TextInput
                   value={companions}
                   onChangeText={(value) => { setCompanions(value); setDirty(true); }}
+                  onSubmitEditing={Keyboard.dismiss}
+                  returnKeyType="done"
+                  blurOnSubmit
                   placeholder="Avec qui ?"
                   placeholderTextColor={colors.textMuted}
                   selectionColor={colors.accent}
@@ -411,6 +427,8 @@ export default function VisitFormModal({ visible, placeId, visit, onClose }: Pro
                 <TextInput
                   value={notes}
                   onChangeText={(value) => { setNotes(value); setDirty(true); }}
+                  onSubmitEditing={Keyboard.dismiss}
+                  blurOnSubmit
                   placeholder="Ambiance, service, ce que vous voulez retenir…"
                   placeholderTextColor={colors.textMuted}
                   selectionColor={colors.accent}
@@ -475,7 +493,7 @@ export default function VisitFormModal({ visible, placeId, visit, onClose }: Pro
             { height: insets.bottom + 2, backgroundColor: colors.surface },
           ]}
         />
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }

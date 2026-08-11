@@ -7,7 +7,7 @@ import {
   View,
   ViewStyle,
 } from 'react-native';
-import { Plus } from 'lucide-react-native';
+import { Plus } from './FlaticonIcon';
 
 import { FontFamily, FontSize, Shadows, Spacing } from '../constants/theme';
 import { useTheme } from '../theme/ThemeProvider';

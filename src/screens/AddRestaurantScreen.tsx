@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -22,7 +23,7 @@ import {
   LocateFixed,
   MapPin,
   X,
-} from 'lucide-react-native';
+} from '../components/FlaticonIcon';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import { v4 as uuidv4 } from 'uuid';
@@ -178,6 +179,8 @@ export default function AddRestaurantScreen({ route, navigation }: Props) {
       <ScrollView
         contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 104 }]}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+        automaticallyAdjustKeyboardInsets
         showsVerticalScrollIndicator={false}
       >
         {step === 1 ? (
@@ -189,6 +192,9 @@ export default function AddRestaurantScreen({ route, navigation }: Props) {
               value={name}
               onChangeText={setName}
               onBlur={() => setNameTouched(true)}
+              onSubmitEditing={Keyboard.dismiss}
+              returnKeyType="done"
+              blurOnSubmit
               placeholder="Ex. Mokonuts"
               placeholderTextColor={colors.textMuted}
               selectionColor={colors.accent}
@@ -235,6 +241,9 @@ export default function AddRestaurantScreen({ route, navigation }: Props) {
               <TextInput
                 value={address}
                 onChangeText={(value) => { setAddress(value); setCoordinates(undefined); }}
+                onSubmitEditing={Keyboard.dismiss}
+                returnKeyType="done"
+                blurOnSubmit
                 placeholder="12 rue… ou nom de la ville"
                 placeholderTextColor={colors.textMuted}
                 selectionColor={colors.accent}
@@ -303,10 +312,10 @@ export default function AddRestaurantScreen({ route, navigation }: Props) {
             <Text style={[styles.helper, { color: colors.textMuted }]}>Sans photo, RestoHub crée une illustration avec le type et les initiales.</Text>
 
             <FieldLabel label="Description" />
-            <TextInput value={description} onChangeText={setDescription} placeholder="Ambiance, service, ce qui vaut le détour…" placeholderTextColor={colors.textMuted} selectionColor={colors.accent} multiline style={[styles.input, styles.multiline, { backgroundColor: colors.surface, borderColor: colors.textPrimary, color: colors.textPrimary }]} />
+            <TextInput value={description} onChangeText={setDescription} onSubmitEditing={Keyboard.dismiss} blurOnSubmit placeholder="Ambiance, service, ce qui vaut le détour…" placeholderTextColor={colors.textMuted} selectionColor={colors.accent} multiline style={[styles.input, styles.multiline, { backgroundColor: colors.surface, borderColor: colors.textPrimary, color: colors.textPrimary }]} />
 
             <FieldLabel label="Tags" />
-            <TextInput value={tagsText} onChangeText={setTagsText} placeholder="terrasse, date, veggie" placeholderTextColor={colors.textMuted} selectionColor={colors.accent} autoCapitalize="none" style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.textPrimary, color: colors.textPrimary }]} />
+            <TextInput value={tagsText} onChangeText={setTagsText} onSubmitEditing={Keyboard.dismiss} returnKeyType="done" blurOnSubmit placeholder="terrasse, date, veggie" placeholderTextColor={colors.textMuted} selectionColor={colors.accent} autoCapitalize="none" style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.textPrimary, color: colors.textPrimary }]} />
             <Text style={[styles.helper, { color: colors.textMuted }]}>Séparez les tags par une virgule.</Text>
           </>
         )}

@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleSheet, Text, View, ViewStyle } from 'react-native';
+import { StyleProp, StyleSheet, Text, View, ViewStyle } from 'react-native';
 import { Restaurant } from '../types';
 import { CATEGORIES } from '../constants/categories';
 import { FontFamily, getSourceColor, isSourceColorKey, Shadows, sourceColorKeyFor } from '../constants/theme';
@@ -7,7 +7,7 @@ import { useTheme } from '../theme/ThemeProvider';
 
 type Props = {
   restaurant: Restaurant;
-  style?: ViewStyle;
+  style?: StyleProp<ViewStyle>;
   compact?: boolean;
 };
 

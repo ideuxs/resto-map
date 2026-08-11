@@ -3,7 +3,7 @@ import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { ArrowLeft, Link2, RotateCcw, Split } from 'lucide-react-native';
+import { ArrowLeft, Link2, RotateCcw, Split } from '../components/FlaticonIcon';
 
 import type { CollectionsStackParamList, DuplicateDecision, DuplicateReview, Restaurant } from '../types';
 import {

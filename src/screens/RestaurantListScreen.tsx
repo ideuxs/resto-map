@@ -1,7 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   FlatList,
+  Keyboard,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -13,6 +16,7 @@ import {
 import { useFocusEffect } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { StatusBar } from 'expo-status-bar';
 import {
   Check,
   Filter,
@@ -21,7 +25,7 @@ import {
   SlidersHorizontal,
   Utensils,
   X,
-} from 'lucide-react-native';
+} from '../components/FlaticonIcon';
 
 import { Restaurant, RestaurantCategory, RestaurantsStackParamList } from '../types';
 import { addCollectionsChangeListener, addRestaurantsChangeListener, getVisibleRestaurants } from '../storage/storage';
@@ -49,7 +53,7 @@ export default function RestaurantListScreen({ navigation }: Props) {
   const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
   const [query, setQuery] = useState('');
   const [source, setSource] = useState<SourceFilter>('all');
-  const [category, setCategory] = useState<RestaurantCategory | null>(null);
+  const [categories, setCategories] = useState<RestaurantCategory[]>([]);
   const [budget, setBudget] = useState<BudgetFilter>('all');
   const [photosOnly, setPhotosOnly] = useState(false);
   const [revisitOnly, setRevisitOnly] = useState(false);
@@ -76,13 +80,13 @@ export default function RestaurantListScreen({ navigation }: Props) {
 
   const filtered = useMemo(() => filterAndSortRestaurants(sourceRestaurants, {
     query,
-    category,
+    categories,
     budget,
     photosOnly,
     revisitOnly,
     minRating,
     sort,
-  }), [sourceRestaurants, query, category, budget, photosOnly, revisitOnly, minRating, sort]);
+  }), [sourceRestaurants, query, categories, budget, photosOnly, revisitOnly, minRating, sort]);
 
   const rated = restaurants.filter((restaurant) => restaurant.rating);
   const average = rated.length
@@ -90,15 +94,17 @@ export default function RestaurantListScreen({ navigation }: Props) {
     : 0;
   const importedCount = restaurants.filter((restaurant) => restaurant.origin?.kind === 'imported' || Boolean(restaurant.sources?.length)).length;
   const importedShare = restaurants.length ? Math.round((importedCount / restaurants.length) * 100) : 0;
-  const advancedCount = [category, budget !== 'all', photosOnly, revisitOnly, minRating, sort !== 'recent'].filter(Boolean).length;
-  const selectedCategoryLabel = category
-    ? CATEGORY_LIST.find((item) => item.value === category)?.label || 'Catégorie'
-    : 'Toutes';
+  const advancedCount = [categories.length > 0, budget !== 'all', photosOnly, revisitOnly, minRating, sort !== 'recent'].filter(Boolean).length;
+  const selectedCategoryLabel = categories.length === 0
+    ? 'Toutes'
+    : categories.length <= 2
+      ? categories.map((value) => CATEGORY_LIST.find((item) => item.value === value)?.label || value).join(' · ')
+      : `${categories.length} catégories`;
   const selectedBudgetLabel = ({ all: 'Tous', low: '1–10 €', mid: '11–20 €', high: '21–30 €', unknown: 'Non renseigné' } as const)[budget];
   const selectedSortLabel = ({ recent: 'Ajout récent', rating: 'Note', visited: 'Dernier passage', name: 'Nom', price_low: 'Prix croissant', price_high: 'Prix décroissant' } as const)[sort];
 
   const resetAdvanced = () => {
-    setCategory(null);
+    setCategories([]);
     setBudget('all');
     setPhotosOnly(false);
     setRevisitOnly(false);
@@ -109,6 +115,12 @@ export default function RestaurantListScreen({ navigation }: Props) {
   const openRandom = () => {
     const restaurant = pickRandomRestaurant(filtered);
     if (restaurant) navigation.navigate('RestaurantDetail', { restaurantId: restaurant.id });
+  };
+
+  const toggleCategory = (value: RestaurantCategory) => {
+    setCategories((current) => current.includes(value)
+      ? current.filter((category) => category !== value)
+      : [...current, value]);
   };
 
   const header = (
@@ -141,6 +153,9 @@ export default function RestaurantListScreen({ navigation }: Props) {
         <TextInput
           value={query}
           onChangeText={setQuery}
+          onSubmitEditing={Keyboard.dismiss}
+          returnKeyType="search"
+          blurOnSubmit
           placeholder="Nom, quartier, plat…"
           placeholderTextColor={colors.textMuted}
           selectionColor={colors.accent}
@@ -209,7 +224,7 @@ export default function RestaurantListScreen({ navigation }: Props) {
   );
 
   return (
-    <View style={[styles.screen, { backgroundColor: colors.background }]}>
+    <KeyboardAvoidingView style={[styles.screen, { backgroundColor: colors.background }]} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <FlatList
         data={filtered}
         keyExtractor={(item) => item.id}
@@ -228,13 +243,16 @@ export default function RestaurantListScreen({ navigation }: Props) {
         )}
         contentContainerStyle={{ paddingBottom: insets.bottom + 96 }}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+        automaticallyAdjustKeyboardInsets
         showsVerticalScrollIndicator={false}
       />
 
-      <Modal visible={filtersOpen} transparent={false} presentationStyle="fullScreen" animationType="slide" onRequestClose={() => setFiltersOpen(false)}>
-        <View style={[styles.modalRoot, { backgroundColor: colors.surface }]}>
+      <Modal visible={filtersOpen} transparent presentationStyle="overFullScreen" animationType="slide" statusBarTranslucent onRequestClose={() => setFiltersOpen(false)}>
+        <StatusBar style="light" />
+        <View style={[styles.modalRoot, { backgroundColor: colors.overlay }]}>
           <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setFiltersOpen(false)} />
-          <View style={[styles.sheet, Shadows.hard, { backgroundColor: colors.surface, borderColor: colors.textPrimary, paddingBottom: insets.bottom + Spacing.lg }]}>
+          <View style={[styles.sheet, Shadows.sheet, { backgroundColor: colors.surface, borderColor: colors.textPrimary }]}>
             <View style={[styles.sheetHandle, { backgroundColor: colors.border }]} />
             <View style={styles.sheetHeader}>
               <View style={styles.sheetHeaderCopy}>
@@ -245,13 +263,13 @@ export default function RestaurantListScreen({ navigation }: Props) {
                 <X size={22} color={colors.textPrimary} />
               </Pressable>
             </View>
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.filterContent}>
+            <ScrollView style={[styles.filterScroll, { backgroundColor: colors.surface }]} showsVerticalScrollIndicator={false} contentContainerStyle={styles.filterContent}>
               <Text style={[styles.sectionLabel, { color: colors.textPrimary }]}>Catégorie</Text>
               <Text style={[styles.selectionHint, { color: colors.textMuted }]}>{selectedCategoryLabel}</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalOptions}>
-                <Option label="Toutes" selected={!category} onPress={() => setCategory(null)} />
+                <Option label="Toutes" selected={categories.length === 0} onPress={() => setCategories([])} />
                 {CATEGORY_LIST.map((item) => (
-                  <Option key={item.value} label={item.label} selected={category === item.value} onPress={() => setCategory(category === item.value ? null : item.value)} />
+                  <Option key={item.value} label={item.label} selected={categories.includes(item.value)} onPress={() => toggleCategory(item.value)} />
                 ))}
               </ScrollView>
 
@@ -277,19 +295,19 @@ export default function RestaurantListScreen({ navigation }: Props) {
                   ['recent', 'Ajout récent'], ['rating', 'Note'], ['visited', 'Dernier passage'], ['name', 'Nom'], ['price_low', 'Prix croissant'], ['price_high', 'Prix décroissant'],
                 ] as const).map(([value, label]) => <Option key={value} label={label} selected={sort === value} onPress={() => setSort(value)} />)}
               </ScrollView>
-              <View style={[styles.sheetFooter, compactControls && styles.sheetFooterCompact]}>
-                <Pressable onPress={resetAdvanced} style={({ pressed }) => [styles.secondaryButton, { borderColor: colors.border, opacity: pressed ? 0.55 : 1 }]}>
-                  <Text style={[styles.secondaryButtonText, { color: colors.textPrimary }]}>Réinitialiser</Text>
-                </Pressable>
-                <Pressable onPress={() => setFiltersOpen(false)} style={({ pressed }) => [styles.applyButton, { backgroundColor: colors.accent, opacity: pressed ? 0.72 : 1 }]}>
-                  <Text style={[styles.applyText, { color: colors.textOnAccent }]}>Voir {filtered.length} adresse{filtered.length !== 1 ? 's' : ''}</Text>
-                </Pressable>
-              </View>
             </ScrollView>
+            <View style={[styles.filterFooter, compactControls && styles.filterFooterCompact, { backgroundColor: colors.surface, paddingBottom: insets.bottom + Spacing.md }]}>
+              <Pressable onPress={resetAdvanced} style={({ pressed }) => [styles.secondaryButton, { borderColor: colors.border, opacity: pressed ? 0.55 : 1 }]}>
+                <Text style={[styles.secondaryButtonText, { color: colors.textPrimary }]}>Réinitialiser</Text>
+              </Pressable>
+              <Pressable onPress={() => setFiltersOpen(false)} style={({ pressed }) => [styles.applyButton, { backgroundColor: colors.accent, opacity: pressed ? 0.72 : 1 }]}>
+                <Text style={[styles.applyText, { color: colors.textOnAccent }]}>Voir {filtered.length} adresse{filtered.length !== 1 ? 's' : ''}</Text>
+              </Pressable>
+            </View>
           </View>
         </View>
       </Modal>
-    </View>
+    </KeyboardAvoidingView>
   );
 
   function Option({ label, selected, onPress }: { label: string; selected: boolean; onPress: () => void }) {
@@ -351,14 +369,15 @@ const styles = StyleSheet.create({
   textAction: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 6 },
   textActionLabel: { fontFamily: FontFamily.semiBold, fontSize: FontSize.xs },
   modalRoot: { flex: 1, justifyContent: 'flex-end' },
-  sheet: { maxHeight: '84%', paddingHorizontal: Spacing.xl, paddingTop: Spacing.sm, borderTopLeftRadius: 16, borderTopRightRadius: 16, borderWidth: 1.5 },
+  sheet: { height: '88%', overflow: 'hidden', paddingTop: Spacing.sm, borderTopLeftRadius: 18, borderTopRightRadius: 18, borderWidth: 1.5 },
   sheetHandle: { width: 36, height: 4, alignSelf: 'center', marginBottom: Spacing.md, borderRadius: BorderRadius.full },
-  sheetHeader: { minHeight: 52, marginBottom: Spacing.sm, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: Spacing.md },
+  sheetHeader: { minHeight: 52, marginBottom: Spacing.sm, paddingHorizontal: Spacing.xl, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: Spacing.md },
   sheetHeaderCopy: { flex: 1 },
   sheetTitle: { fontFamily: FontFamily.semiBold, fontSize: FontSize.xl },
   sheetSubtitle: { marginTop: 3, fontFamily: FontFamily.regular, fontSize: FontSize.xs },
   closeButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-  filterContent: { paddingBottom: Spacing.sm },
+  filterScroll: { flex: 1 },
+  filterContent: { paddingHorizontal: Spacing.xl, paddingBottom: 0 },
   sectionLabel: { marginTop: Spacing.lg, marginBottom: 3, fontFamily: FontFamily.semiBold, fontSize: FontSize.sm },
   selectionHint: { fontFamily: FontFamily.regular, fontSize: FontSize.xs },
   horizontalOptions: { paddingVertical: Spacing.sm, paddingRight: Spacing.xl, gap: Spacing.sm },
@@ -369,8 +388,8 @@ const styles = StyleSheet.create({
   preferenceLabel: { fontFamily: FontFamily.medium, fontSize: FontSize.sm },
   preferenceMark: { width: 22, height: 22, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderRadius: 11 },
   preferenceCheck: { fontFamily: FontFamily.bold, fontSize: 14, lineHeight: 17 },
-  sheetFooter: { marginTop: Spacing.xxl, flexDirection: 'row', gap: Spacing.sm },
-  sheetFooterCompact: { flexDirection: 'column' },
+  filterFooter: { marginTop: -1, paddingHorizontal: Spacing.xl, paddingTop: Spacing.md, flexDirection: 'row', gap: Spacing.sm, shadowOpacity: 0, elevation: 0 },
+  filterFooterCompact: { flexDirection: 'column' },
   secondaryButton: { minHeight: 50, paddingHorizontal: Spacing.lg, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderRadius: BorderRadius.md },
   secondaryButtonText: { fontFamily: FontFamily.semiBold, fontSize: FontSize.sm },
   applyButton: { flex: 1, minHeight: 50, alignItems: 'center', justifyContent: 'center', borderRadius: BorderRadius.md },

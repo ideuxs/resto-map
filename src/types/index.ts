@@ -3,6 +3,7 @@ import type { NavigatorScreenParams } from '@react-navigation/native';
 export type RestaurantCategory =
   | 'restaurant'
   | 'fastfood'
+  | 'burger'
   | 'boulangerie'
   | 'cafe'
   | 'bar'

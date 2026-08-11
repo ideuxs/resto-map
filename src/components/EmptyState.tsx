@@ -1,11 +1,11 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { LucideIcon } from 'lucide-react-native';
+import { FlaticonIcon } from './FlaticonIcon';
 import { useTheme } from '../theme/ThemeProvider';
 import { BorderRadius, FontFamily, FontSize, Shadows, Spacing } from '../constants/theme';
 
 type Props = {
-  icon: LucideIcon;
+  icon: FlaticonIcon;
   title: string;
   subtitle?: string;
   actionLabel?: string;

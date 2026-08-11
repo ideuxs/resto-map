@@ -6,7 +6,7 @@ export type BudgetFilter = 'all' | 'low' | 'mid' | 'high' | 'unknown';
 
 export interface RestaurantFilters {
   query: string;
-  category: RestaurantCategory | null;
+  categories: RestaurantCategory[];
   budget: BudgetFilter;
   photosOnly: boolean;
   revisitOnly: boolean;
@@ -46,6 +46,7 @@ export function filterAndSortRestaurants(
   filters: RestaurantFilters
 ): Restaurant[] {
   const q = normalized(filters.query);
+  const selectedCategories = filters.categories || [];
 
   const filtered = restaurants.filter((restaurant) => {
     const matchesQuery =
@@ -57,7 +58,7 @@ export function filterAndSortRestaurants(
       (restaurant.tags || []).some((tag) => normalized(tag).includes(q)) ||
       normalized(restaurant.category).includes(q);
 
-    const matchesCategory = !filters.category || restaurant.category === filters.category;
+    const matchesCategory = selectedCategories.length === 0 || selectedCategories.includes(restaurant.category);
     const matchesPhotos = !filters.photosOnly || restaurant.images.length > 0;
     const matchesPrice = matchBudget(effectivePrice(restaurant), filters.budget);
     const matchesRevisit = !filters.revisitOnly || restaurant.wouldReturn === true;

@@ -27,12 +27,12 @@ import {
   Navigation2,
   Pencil,
   Plus,
+  Sparkles,
   Star,
   Trash2,
   UsersRound,
-  WalletCards,
   X,
-} from 'lucide-react-native';
+} from '../components/FlaticonIcon';
 
 import { Collection, Restaurant, Visit } from '../types';
 import {
@@ -55,7 +55,7 @@ import VisitFormModal from '../components/VisitFormModal';
 import { useTheme } from '../theme/ThemeProvider';
 import { BorderRadius, FontFamily, FontSize, getSourceColor, isSourceColorKey, Shadows, sourceColorKeyFor, Spacing } from '../constants/theme';
 import { priceBandLabel } from '../domain/priceBands';
-import { Utensils } from 'lucide-react-native';
+import { Utensils } from '../components/FlaticonIcon';
 
 type Props = { route: any; navigation: any };
 
@@ -252,7 +252,7 @@ export default function RestaurantDetailScreen({ route, navigation }: Props) {
                 <UsersRound size={20} color={sourceColor} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={[styles.sourceTitle, { color: sourceColor }]}>{imported ? 'Liste de' : 'Aussi recommandé par'} {friendSource.ownerName || 'un ami'}</Text>
+                <Text style={[styles.sourceTitle, { color: sourceColor }]}>{imported ? 'Partagée par' : 'Aussi recommandé par'} {friendSource.ownerName || 'un ami'}</Text>
                 <Text style={[styles.sourceDetail, { color: colors.textMuted }]}>{imported ? 'Adresse importée' : 'Votre adresse reste personnelle'} · ouvrir la liste</Text>
               </View>
               <ChevronRight size={18} color={colors.textMuted} />
@@ -288,7 +288,7 @@ export default function RestaurantDetailScreen({ route, navigation }: Props) {
             <View style={[styles.summary, Shadows.hard, { backgroundColor: colors.surface, borderColor: colors.textPrimary }]}>
             <SummaryMetric label="Ma note" value={averageRating != null ? `${averageRating.toLocaleString('fr-FR', { maximumFractionDigits: 1 })}/5` : '—'} icon={Star} color={colors.accentYellow} />
             <SummaryMetric label="Visites" value={String(visits.length)} icon={CalendarDays} color={colors.accent} />
-            <SummaryMetric label="Budget" value={priceBandLabel(restaurant) || 'Non renseigné'} icon={WalletCards} color={colors.lavender} />
+            <SummaryMetric label="Budget" value={priceBandLabel(restaurant) || 'Non renseigné'} icon={Star} color={colors.accentYellow} />
           </View>
 
           <View style={[styles.journalSection, Shadows.hard, { backgroundColor: colors.surface, borderColor: colors.textPrimary }]}>
@@ -337,20 +337,27 @@ export default function RestaurantDetailScreen({ route, navigation }: Props) {
             )}
           </View>
 
-          {restaurant.signatureDish ? (
-            <DetailSection title="Plat à retenir">
-              <Text style={[styles.body, { color: colors.textPrimary }]}>{restaurant.signatureDish}</Text>
-            </DetailSection>
-          ) : null}
-          {restaurant.description ? (
-            <DetailSection title="À propos">
-              <Text style={[styles.body, { color: colors.textSecondary }]}>{restaurant.description}</Text>
-            </DetailSection>
-          ) : null}
-          {restaurant.tags?.length ? (
-            <DetailSection title="Tags">
-              <Text style={[styles.body, { color: colors.textSecondary }]}>{restaurant.tags.join(' · ')}</Text>
-            </DetailSection>
+          {restaurant.signatureDish || restaurant.description || restaurant.tags?.length ? (
+            <View style={[styles.section, Shadows.hard, { backgroundColor: colors.surface, borderColor: colors.textPrimary }]}>
+              {restaurant.description ? (
+                <>
+                  <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>À propos</Text>
+                  <Text style={[styles.body, { color: colors.textSecondary }]}>{restaurant.description}</Text>
+                </>
+              ) : null}
+              {restaurant.signatureDish ? (
+                <View style={restaurant.description ? styles.sectionSubsection : undefined}>
+                  <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Plat à retenir</Text>
+                  <Text style={[styles.body, { color: colors.textPrimary }]}>{restaurant.signatureDish}</Text>
+                </View>
+              ) : null}
+              {restaurant.tags?.length ? (
+                <View style={restaurant.description || restaurant.signatureDish ? styles.sectionSubsection : undefined}>
+                  <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Tags</Text>
+                  <Text style={[styles.body, { color: colors.textSecondary }]}>{restaurant.tags.join(' · ')}</Text>
+                </View>
+              ) : null}
+            </View>
           ) : null}
 
           {restaurant.location ? (
@@ -448,22 +455,26 @@ export default function RestaurantDetailScreen({ route, navigation }: Props) {
         </View>
       </Modal>
 
-      <Modal visible={listModalOpen} transparent={false} presentationStyle="fullScreen" animationType="slide" onRequestClose={() => setListModalOpen(false)}>
-        <View style={[styles.modalRoot, { backgroundColor: colors.surface }]}>
+      <Modal visible={listModalOpen} transparent={false} presentationStyle="fullScreen" animationType="slide" statusBarTranslucent onRequestClose={() => setListModalOpen(false)}>
+        <View style={[styles.modalRoot, { backgroundColor: colors.background }]}>
           <View
             style={[
               styles.listModalSheet,
               {
-                backgroundColor: colors.surface,
-                borderColor: colors.textPrimary,
+                backgroundColor: colors.background,
                 paddingTop: insets.top,
-                paddingBottom: insets.bottom,
               },
             ]}
           >
+            <View pointerEvents="none" style={StyleSheet.absoluteFillObject}>
+              <View style={[styles.listModalBackdropShape, styles.listModalBackdropPink, { backgroundColor: `${colors.accentPink}18` }]} />
+              <View style={[styles.listModalBackdropShape, styles.listModalBackdropIndigo, { backgroundColor: `${colors.accent}16` }]} />
+              <View style={[styles.listModalBackdropStamp, { borderColor: `${colors.textPrimary}12` }]} />
+            </View>
+
             <View style={styles.listModalHeader}>
-              <View style={[styles.listModalHeaderIcon, { backgroundColor: colors.surfaceLight, borderColor: colors.textPrimary }]}>
-                <ListPlus size={21} color={colors.accent} />
+              <View style={[styles.listModalHeaderIcon, { backgroundColor: `${colors.accentPink}18`, borderColor: colors.textPrimary }]}>
+                <ListPlus size={24} color={colors.accentPink} />
               </View>
               <View style={styles.listModalHeaderCopy}>
                 <Text style={[styles.listModalTitle, { color: colors.textPrimary }]}>Ajouter à mes listes</Text>
@@ -477,18 +488,26 @@ export default function RestaurantDetailScreen({ route, navigation }: Props) {
             </View>
 
             <ScrollView
-              style={[styles.listModalScroll, { backgroundColor: colors.surface }]}
-              contentContainerStyle={[styles.listModalContent, { backgroundColor: colors.surface }]}
+              style={[styles.listModalScroll, { backgroundColor: 'transparent' }]}
+              contentContainerStyle={[styles.listModalContent, { backgroundColor: 'transparent' }]}
               bounces={false}
               alwaysBounceVertical={false}
               contentInsetAdjustmentBehavior="never"
               automaticallyAdjustContentInsets={false}
               showsVerticalScrollIndicator={false}
             >
-              <View style={styles.listModalSummary}>
-                <Text style={[styles.listModalSummaryLabel, { color: colors.textSecondary }]}>Sélection actuelle</Text>
-                <View style={[styles.listModalCount, { backgroundColor: `${colors.accent}18`, borderColor: colors.accent }]}>
-                  <Text style={[styles.listModalCountText, { color: colors.accent }]}>{membership.size}</Text>
+              <View style={[styles.listModalSummary, Shadows.surface, { backgroundColor: `${colors.accentPink}12`, borderColor: colors.textPrimary }]}>
+                <View style={styles.listModalSummaryCopy}>
+                  <View style={styles.listModalSummaryHeading}>
+                    <Sparkles size={16} color={colors.accentPink} />
+                    <Text style={[styles.listModalSummaryLabel, { color: colors.textPrimary }]}>Sélection actuelle</Text>
+                  </View>
+                  <Text style={[styles.listModalSummaryDetail, { color: colors.textMuted }]}>
+                    {membership.size ? `${membership.size} liste${membership.size !== 1 ? 's' : ''} sélectionnée${membership.size !== 1 ? 's' : ''}` : 'Aucune liste sélectionnée'}
+                  </Text>
+                </View>
+                <View style={[styles.listModalCount, { backgroundColor: membership.size ? colors.accentPink : colors.surface, borderColor: colors.textPrimary }]}>
+                  <Text style={[styles.listModalCountText, { color: membership.size ? colors.textOnAccent : colors.accentPink }]}>{membership.size}</Text>
                 </View>
               </View>
 
@@ -504,14 +523,15 @@ export default function RestaurantDetailScreen({ route, navigation }: Props) {
                     accessibilityLabel={`${selected ? 'Retirer de' : 'Ajouter à'} ${collection.name}`}
                     style={({ pressed }) => [
                       styles.collectionRow,
+                      Shadows.surface,
                       {
-                        backgroundColor: selected ? `${colors.accent}12` : colors.surfaceLight,
+                        backgroundColor: selected ? `${colors.accent}16` : colors.surface,
                         borderColor: selected ? colors.accent : colors.textPrimary,
                         opacity: pressed ? 0.62 : 1,
                       },
                     ]}
                   >
-                    <View style={[styles.collectionIcon, { backgroundColor: colors.surface, borderColor: colors.textPrimary }]}>
+                    <View style={[styles.collectionIcon, { backgroundColor: selected ? `${colors.accent}12` : colors.surfaceLight, borderColor: selected ? colors.accent : colors.textPrimary }]}>
                       <CollectionIcon size={20} color={selected ? colors.accent : colors.textSecondary} />
                     </View>
                     <View style={styles.collectionCopy}>
@@ -526,30 +546,33 @@ export default function RestaurantDetailScreen({ route, navigation }: Props) {
                   </Pressable>
                 );
               }) : (
-                <View style={[styles.noListsPanel, { backgroundColor: colors.surfaceLight, borderColor: colors.textPrimary }]}>
+                <View style={[styles.noListsPanel, Shadows.surface, { backgroundColor: colors.surface, borderColor: colors.textPrimary }]}>
                   <ListPlus size={22} color={colors.accent} />
                   <Text style={[styles.noListsTitle, { color: colors.textPrimary }]}>Aucune liste personnelle</Text>
                   <Text style={[styles.noLists, { color: colors.textMuted }]}>Créez d’abord une liste depuis l’onglet Listes.</Text>
                 </View>
               )}
 
-              <View style={styles.listModalFooter}>
-                <Text style={[styles.listModalFooterHint, { color: colors.textMuted }]}>Les changements sont enregistrés immédiatement.</Text>
-                <Pressable
-                  onPress={() => setListModalOpen(false)}
-                  accessibilityRole="button"
-                  style={({ pressed }) => [styles.listModalDone, { backgroundColor: colors.accent, borderColor: colors.textPrimary, opacity: pressed ? 0.72 : 1 }]}
-                >
-                  <Text style={[styles.listModalDoneText, { color: colors.textOnAccent }]}>Terminé</Text>
-                </Pressable>
-              </View>
             </ScrollView>
+            <View style={[styles.listModalFooter, { backgroundColor: colors.background, paddingBottom: insets.bottom + Spacing.md }]}>
+              <View style={styles.listModalFooterHintRow}>
+                <Check size={15} color={colors.accentPink} strokeWidth={3} />
+                <Text style={[styles.listModalFooterHint, { color: colors.textMuted }]}>Enregistré automatiquement</Text>
+              </View>
+              <Pressable
+                onPress={() => setListModalOpen(false)}
+                accessibilityRole="button"
+                style={({ pressed }) => [styles.listModalDone, Shadows.hard, { backgroundColor: colors.accent, borderColor: colors.textPrimary, opacity: pressed ? 0.72 : 1 }]}
+              >
+                <Text style={[styles.listModalDoneText, { color: colors.textOnAccent }]}>Terminé</Text>
+              </Pressable>
+            </View>
           </View>
           <View
             pointerEvents="none"
             style={[
               styles.bottomSafeAreaFill,
-              { height: insets.bottom + 2, backgroundColor: colors.surface },
+              { height: insets.bottom + 2, backgroundColor: colors.background },
             ]}
           />
         </View>
@@ -570,15 +593,6 @@ export default function RestaurantDetailScreen({ route, navigation }: Props) {
         <Icon size={16} color={color} />
         <Text style={[styles.summaryLabel, { color: colors.textMuted }]}>{label}</Text>
         <Text style={[styles.summaryValue, { color: colors.textPrimary }]} numberOfLines={1}>{value}</Text>
-      </View>
-    );
-  }
-
-  function DetailSection({ title: sectionTitle, children }: { title: string; children: React.ReactNode }) {
-    return (
-      <View style={[styles.section, Shadows.hard, { backgroundColor: colors.surface, borderColor: colors.textPrimary }]}>
-        <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>{sectionTitle}</Text>
-        {children}
       </View>
     );
   }
@@ -634,7 +648,7 @@ export default function RestaurantDetailScreen({ route, navigation }: Props) {
           ) : null}
           {visit.amount != null ? (
             <View style={styles.visitMeta}>
-              <WalletCards size={15} color={colors.accent} />
+              <Star size={15} color={colors.accentYellow} fill={colors.accentYellow} />
               <Text style={[styles.visitMetaText, { color: colors.textSecondary }]}>{formatAmount(visit.amount)}</Text>
             </View>
           ) : null}
@@ -692,6 +706,7 @@ const styles = StyleSheet.create({
   summaryLabel: { fontFamily: FontFamily.regular, fontSize: FontSize.xs },
   summaryValue: { maxWidth: '100%', fontFamily: FontFamily.semiBold, fontSize: FontSize.sm },
   section: { marginTop: Spacing.xxl, padding: Spacing.lg, borderWidth: 1.5, borderRadius: 12 },
+  sectionSubsection: { marginTop: Spacing.xl },
   sectionTitle: { marginBottom: Spacing.sm, fontFamily: FontFamily.semiBold, fontSize: FontSize.lg },
   body: { fontFamily: FontFamily.regular, fontSize: FontSize.md, lineHeight: 24 },
   journalSection: { marginTop: Spacing.xxxl, padding: Spacing.lg, borderWidth: 1.5, borderRadius: 12 },
@@ -785,72 +800,103 @@ const styles = StyleSheet.create({
     flex: 1,
     width: '100%',
     overflow: 'hidden',
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-    borderWidth: 1.5,
+  },
+  listModalBackdropShape: { position: 'absolute', overflow: 'hidden' },
+  listModalBackdropPink: {
+    top: 174,
+    right: -118,
+    width: 252,
+    height: 252,
+    borderRadius: 28,
+    transform: [{ rotate: '14deg' }],
+  },
+  listModalBackdropIndigo: {
+    bottom: 104,
+    left: -104,
+    width: 190,
+    height: 190,
+    borderRadius: 24,
+    transform: [{ rotate: '-18deg' }],
+  },
+  listModalBackdropStamp: {
+    position: 'absolute',
+    top: 360,
+    right: 28,
+    width: 74,
+    height: 74,
+    borderWidth: 2,
+    borderRadius: 18,
+    transform: [{ rotate: '-12deg' }],
   },
   listModalHeader: {
-    minHeight: 96,
+    minHeight: 108,
     paddingHorizontal: Spacing.xl,
     paddingTop: Spacing.lg,
-    paddingBottom: Spacing.md,
+    paddingBottom: Spacing.lg,
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: Spacing.md,
   },
   listModalHeaderIcon: {
-    width: 44,
-    height: 44,
+    width: 52,
+    height: 52,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1.5,
-    borderRadius: 8,
+    borderRadius: 12,
   },
   listModalHeaderCopy: { flex: 1, minWidth: 0 },
   listModalTitle: { fontFamily: FontFamily.semiBold, fontSize: FontSize.xl, lineHeight: 29 },
   listModalSubtitle: { marginTop: 4, fontFamily: FontFamily.regular, fontSize: FontSize.xs, lineHeight: 18 },
   listModalScroll: { flex: 1 },
-  listModalContent: { flexGrow: 1, paddingHorizontal: Spacing.xl, paddingBottom: Spacing.xxl },
+  listModalContent: { flexGrow: 1, paddingHorizontal: Spacing.xl, paddingTop: Spacing.lg, paddingBottom: Spacing.xl },
   listModalSummary: {
-    minHeight: 44,
-    marginTop: Spacing.sm,
-    marginBottom: Spacing.sm,
+    minHeight: 68,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.md,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    borderWidth: 1.5,
+    borderRadius: 14,
   },
+  listModalSummaryCopy: { flex: 1, minWidth: 0 },
+  listModalSummaryHeading: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
   listModalSummaryLabel: { fontFamily: FontFamily.semiBold, fontSize: FontSize.sm },
+  listModalSummaryDetail: { marginTop: 4, fontFamily: FontFamily.regular, fontSize: FontSize.xs },
   listModalCount: {
-    minWidth: 34,
-    height: 34,
+    minWidth: 40,
+    height: 40,
     paddingHorizontal: Spacing.sm,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1.5,
-    borderRadius: 8,
+    borderRadius: 12,
   },
   listModalCountText: { fontFamily: FontFamily.bold, fontSize: FontSize.sm },
   collectionRow: {
-    minHeight: 72,
-    marginTop: Spacing.sm,
+    minHeight: 84,
+    marginTop: Spacing.md,
     paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.md,
     borderWidth: 1.5,
-    borderRadius: 10,
+    borderRadius: 14,
   },
-  collectionIcon: { width: 42, height: 42, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderRadius: 8 },
+  collectionIcon: { width: 52, height: 52, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderRadius: 12 },
   collectionCopy: { flex: 1, minWidth: 0 },
-  collectionName: { fontFamily: FontFamily.semiBold, fontSize: FontSize.md },
+  collectionName: { fontFamily: FontFamily.semiBold, fontSize: FontSize.lg },
   collectionMeta: { marginTop: 2, fontFamily: FontFamily.regular, fontSize: FontSize.xs },
-  checkbox: { width: 28, height: 28, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderRadius: 8 },
+  checkbox: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderRadius: 10 },
   noListsPanel: { marginTop: Spacing.lg, padding: Spacing.xl, alignItems: 'center', borderWidth: 1.5, borderRadius: 12 },
   noListsTitle: { marginTop: Spacing.sm, fontFamily: FontFamily.semiBold, fontSize: FontSize.md },
   noLists: { marginTop: 4, fontFamily: FontFamily.regular, fontSize: FontSize.sm, lineHeight: 21, textAlign: 'center' },
-  listModalFooter: { marginTop: 'auto', paddingTop: Spacing.xxxl },
-  listModalFooterHint: { marginBottom: Spacing.sm, fontFamily: FontFamily.regular, fontSize: FontSize.xs, textAlign: 'center' },
-  listModalDone: { minHeight: 52, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderRadius: 8 },
+  listModalFooter: { paddingTop: Spacing.md, paddingHorizontal: Spacing.xl },
+  listModalFooterHintRow: { minHeight: 36, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Spacing.sm },
+  listModalFooterHint: { fontFamily: FontFamily.regular, fontSize: FontSize.xs, textAlign: 'center' },
+  listModalDone: { minHeight: 56, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderRadius: 12 },
   listModalDoneText: { fontFamily: FontFamily.semiBold, fontSize: FontSize.md },
   galleryRoot: { flex: 1, justifyContent: 'center' },
   galleryTop: { position: 'absolute', left: Spacing.lg, right: Spacing.lg, flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },

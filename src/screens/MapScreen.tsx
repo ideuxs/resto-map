@@ -1,10 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, type LayoutChangeEvent, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import MapView, { Marker, Polyline, PROVIDER_DEFAULT } from 'react-native-maps';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
-import { CarFront, LocateFixed, MapPinned, Navigation2, UsersRound, X } from 'lucide-react-native';
+import { CarFront, LocateFixed, MapPinned, Navigation2, UsersRound, X } from '../components/FlaticonIcon';
 import * as Location from 'expo-location';
 
 import { Restaurant } from '../types';
@@ -41,6 +41,7 @@ export default function MapScreen() {
   const [selectedRestaurant, setSelectedRestaurant] = useState<Restaurant | null>(null);
   const [travel, setTravel] = useState<TravelTimes | null>(null);
   const [travelLoading, setTravelLoading] = useState(false);
+  const [miniCardHeight, setMiniCardHeight] = useState(0);
 
   const load = useCallback(() => { getVisibleRestaurants().then(setRestaurants); }, []);
   useFocusEffect(useCallback(() => { load(); }, [load]));
@@ -135,8 +136,8 @@ export default function MapScreen() {
     ? [userLocation, ...(travel?.drivingPath || []), selectedRestaurant.location]
     : [];
 
-  const GlassPanel = ({ children, style }: { children: React.ReactNode; style?: any }) => (
-    <View style={[style, { overflow: 'hidden' }]}>
+  const GlassPanel = ({ children, style, onLayout }: { children: React.ReactNode; style?: any; onLayout?: (event: LayoutChangeEvent) => void }) => (
+    <View onLayout={onLayout} style={[style, { overflow: 'hidden' }]}>
       <BlurView
         pointerEvents="none"
         intensity={isDark ? 58 : 72}
@@ -175,7 +176,7 @@ export default function MapScreen() {
               key={restaurant.id}
               coordinate={restaurant.location!}
               onPress={() => setSelectedRestaurant(restaurant)}
-              accessibilityLabel={`${restaurant.name}, ${imported ? `liste de ${restaurant.origin?.ownerName || 'un ami'}` : 'adresse personnelle'}`}
+              accessibilityLabel={`${restaurant.name}, ${imported ? `partagée par ${restaurant.origin?.ownerName || 'un ami'}` : 'adresse personnelle'}`}
             >
               {imported ? (
                 <View style={styles.markerWrap}>
@@ -209,7 +210,13 @@ export default function MapScreen() {
       </MapView>
 
       {selectedRestaurant && selectedCategory ? (
-        <GlassPanel style={[styles.miniCard, Shadows.hard, { bottom: insets.bottom + 74, backgroundColor: colors.glass, borderColor: colors.textPrimary }]}>
+        <GlassPanel
+          onLayout={({ nativeEvent }) => {
+            const nextHeight = Math.round(nativeEvent.layout.height);
+            setMiniCardHeight((currentHeight) => currentHeight === nextHeight ? currentHeight : nextHeight);
+          }}
+          style={[styles.miniCard, Shadows.hard, { bottom: insets.bottom + 74, backgroundColor: colors.glass, borderColor: colors.textPrimary }]}
+        >
           <View style={styles.miniHeader}>
             <View style={[styles.miniCategoryIcon, { backgroundColor: `${selectedSourceColor}16` }]}>
               <selectedCategory.icon size={18} color={selectedSourceColor} />
@@ -291,7 +298,12 @@ export default function MapScreen() {
         style={({ pressed }) => [
           styles.locate,
           Shadows.hard,
-          { bottom: insets.bottom + (selectedRestaurant ? 356 : 76), backgroundColor: colors.glass, borderColor: colors.textPrimary, opacity: pressed ? 0.65 : 1 },
+          {
+            bottom: insets.bottom + (selectedRestaurant ? (miniCardHeight ? miniCardHeight + 74 + Spacing.md : 280) : 76),
+            backgroundColor: colors.glass,
+            borderColor: colors.textPrimary,
+            opacity: pressed ? 0.65 : 1,
+          },
         ]}
       >
         <LocateFixed size={21} color={userLocation ? colors.accent : colors.textMuted} />
