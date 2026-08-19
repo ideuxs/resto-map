@@ -132,6 +132,8 @@ const GLYPHS: Record<FlaticonIconName, number> = {
  * Regular keeps all outline icons stable.
  */
 const SOLID_GLYPHS: Partial<Record<FlaticonIconName, number>> = {
+  'book-bookmark': 0xf276,
+  bookmark: 0xf289,
   'map-pin': 0xf8eb,
   star: 0xfcc1,
 };

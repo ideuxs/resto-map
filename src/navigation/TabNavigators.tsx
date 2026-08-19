@@ -1,7 +1,7 @@
 import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
-import type { CollectionsStackParamList, RestaurantsStackParamList } from '../types';
+import type { CollectionsStackParamList, RestaurantsStackParamList, WishlistStackParamList } from '../types';
 import { useTheme } from '../theme/ThemeProvider';
 import RestaurantListScreen from '../screens/RestaurantListScreen';
 import AddRestaurantScreen from '../screens/AddRestaurantScreen';
@@ -9,9 +9,11 @@ import RestaurantDetailScreen from '../screens/RestaurantDetailScreen';
 import CollectionsListScreen from '../screens/CollectionsListScreen';
 import CollectionDetailScreen from '../screens/CollectionDetailScreen';
 import DuplicateReviewScreen from '../screens/DuplicateReviewScreen';
+import WishlistScreen from '../screens/WishlistScreen';
 
 const RestaurantStack = createNativeStackNavigator<RestaurantsStackParamList>();
 const CollectionStack = createNativeStackNavigator<CollectionsStackParamList>();
+const WishlistStack = createNativeStackNavigator<WishlistStackParamList>();
 
 /**
  * The native tab host owns the bottom bar. These stacks only own the screens
@@ -31,6 +33,23 @@ export function RestaurantsNavigator() {
       <RestaurantStack.Screen name="AddRestaurant" component={AddRestaurantScreen} />
       <RestaurantStack.Screen name="RestaurantDetail" component={RestaurantDetailScreen} />
     </RestaurantStack.Navigator>
+  );
+}
+
+export function WishlistNavigator() {
+  const { colors } = useTheme();
+  return (
+    <WishlistStack.Navigator
+      screenOptions={{
+        headerShown: false,
+        contentStyle: { backgroundColor: colors.background },
+        animation: 'default',
+      }}
+    >
+      <WishlistStack.Screen name="WishlistHome" component={WishlistScreen} />
+      <WishlistStack.Screen name="RestaurantDetail" component={RestaurantDetailScreen} />
+      <WishlistStack.Screen name="AddRestaurant" component={AddRestaurantScreen} />
+    </WishlistStack.Navigator>
   );
 }
 

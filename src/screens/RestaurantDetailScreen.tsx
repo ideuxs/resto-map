@@ -18,6 +18,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   ArrowLeft,
+  Bookmark,
   CalendarDays,
   Check,
   ChevronRight,
@@ -44,12 +45,15 @@ import {
   addRestaurantToCollection,
   addRestaurantsChangeListener,
   addVisitsChangeListener,
+  addWishlistChangeListener,
   deleteVisit,
   deleteRestaurant,
   getCollections,
   getRestaurants,
   getVisits,
+  isWishlisted,
   removeRestaurantFromCollection,
+  toggleWishlist,
 } from '../storage/storage';
 import { CATEGORIES } from '../constants/categories';
 import { getCollectionIcon } from '../constants/collectionIcons';
@@ -91,14 +95,17 @@ export default function RestaurantDetailScreen({ route, navigation }: Props) {
   const [editingVisit, setEditingVisit] = useState<Visit | null>(null);
   const [galleryOpen, setGalleryOpen] = useState(false);
   const [galleryIndex, setGalleryIndex] = useState(0);
+  const [wishlisted, setWishlisted] = useState(false);
 
   const load = useCallback(async () => {
     const [allRestaurants, allCollections] = await Promise.all([getRestaurants(), getCollections()]);
     const nextRestaurant = allRestaurants.find((item) => item.id === route.params.restaurantId) || null;
     const nextVisits = nextRestaurant ? await getVisits(nextRestaurant.placeId || nextRestaurant.id) : [];
+    const isW = nextRestaurant ? await isWishlisted(nextRestaurant.id) : false;
     setRestaurant(nextRestaurant);
     setCollections(allCollections.filter((collection) => collection.kind !== 'imported'));
     setVisits(nextVisits);
+    setWishlisted(isW);
   }, [route.params.restaurantId]);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
@@ -106,8 +113,17 @@ export default function RestaurantDetailScreen({ route, navigation }: Props) {
     const offRestaurants = addRestaurantsChangeListener(load);
     const offCollections = addCollectionsChangeListener(load);
     const offVisits = addVisitsChangeListener(load);
-    return () => { offRestaurants(); offCollections(); offVisits(); };
+    const offWishlist = addWishlistChangeListener(load);
+    return () => { offRestaurants(); offCollections(); offVisits(); offWishlist(); };
   }, [load]);
+
+  const handleToggleWishlist = async () => {
+    if (!restaurant) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
+    const next = !wishlisted;
+    setWishlisted(next);
+    await toggleWishlist(restaurant.id);
+  };
 
   const membership = useMemo(() => new Set(
     collections.filter((collection) => collection.restaurantIds.includes(restaurant?.id || '')).map((collection) => collection.id)
@@ -222,11 +238,29 @@ export default function RestaurantDetailScreen({ route, navigation }: Props) {
           <ArrowLeft size={22} color={colors.textPrimary} />
         </Pressable>
         <Text style={[styles.topTitle, { color: colors.textPrimary }]} numberOfLines={1}>{restaurant.name}</Text>
-        {!imported ? (
-          <Pressable onPress={() => navigation.navigate('AddRestaurant', { restaurant })} accessibilityLabel="Modifier" style={styles.topAction}>
-            <Pencil size={20} color={colors.textPrimary} />
+        <View style={styles.topActionsGroup}>
+          <Pressable
+            onPress={handleToggleWishlist}
+            accessibilityRole="button"
+            accessibilityLabel={wishlisted ? 'Retirer des envies' : 'Ajouter aux envies'}
+            style={({ pressed }) => [
+              styles.topAction,
+              { transform: [{ scale: pressed ? 0.9 : 1 }] },
+            ]}
+          >
+            <Bookmark
+              size={20}
+              fill={wishlisted ? (isDark ? '#A84BAE' : colors.primary) : 'none'}
+              color={wishlisted ? (isDark ? '#A84BAE' : colors.primary) : colors.textPrimary}
+              strokeWidth={wishlisted ? 2.6 : 1.8}
+            />
           </Pressable>
-        ) : <View style={styles.topAction} />}
+          {!imported ? (
+            <Pressable onPress={() => navigation.navigate('AddRestaurant', { restaurant })} accessibilityLabel="Modifier" style={styles.topAction}>
+              <Pencil size={20} color={colors.textPrimary} />
+            </Pressable>
+          ) : null}
+        </View>
       </View>
 
       <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + 120 }} showsVerticalScrollIndicator={false}>
@@ -833,6 +867,8 @@ const styles = StyleSheet.create({
   screen: { flex: 1 },
   topBar: { minHeight: 50, paddingHorizontal: Spacing.sm, paddingBottom: 4, flexDirection: 'row', alignItems: 'center' },
   topAction: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  topActionWishlisted: { width: 36, height: 36, borderRadius: BorderRadius.full },
+  topActionsGroup: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   topTitle: { flex: 1, fontFamily: FontFamily.bold, fontSize: FontSize.md, letterSpacing: -0.2, textAlign: 'center' },
   hero: { position: 'relative' },
   heroImage: { height: 260 },
