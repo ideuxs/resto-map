@@ -2,21 +2,22 @@ import { RestaurantCategory } from '../types';
 import {
   Utensils,
   Sandwich,
+  Burger,
   Croissant,
   Coffee,
   Beer,
   Pizza,
-  Soup,
-  JapaneseYen,
-  Flame,
   Cake,
   Store,
-  LucideIcon
-} from 'lucide-react-native';
+  Sushi,
+  Kebab,
+  Noodles,
+  FlaticonIcon
+} from '../components/FlaticonIcon';
 
 export interface CategoryInfo {
   label: string;
-  icon: LucideIcon;
+  icon: FlaticonIcon;
   color: string;
   markerColor: string;
 }
@@ -25,68 +26,74 @@ export const CATEGORIES: Record<RestaurantCategory, CategoryInfo> = {
   restaurant: {
     label: 'Restaurant',
     icon: Utensils,
-    color: '#6C5CE7',
-    markerColor: '#6C5CE7',
+    color: '#292C90',
+    markerColor: '#292C90',
   },
   fastfood: {
     label: 'Fast-food',
     icon: Sandwich,
-    color: '#E17055',
-    markerColor: '#E17055',
+    color: '#4947A8',
+    markerColor: '#4947A8',
+  },
+  burger: {
+    label: 'Burger',
+    icon: Burger,
+    color: '#C35A26',
+    markerColor: '#C35A26',
   },
   boulangerie: {
     label: 'Boulangerie',
     icon: Croissant,
-    color: '#FDCB6E',
-    markerColor: '#D4A017',
+    color: '#6544A6',
+    markerColor: '#6544A6',
   },
   cafe: {
     label: 'Café',
     icon: Coffee,
-    color: '#A0522D',
-    markerColor: '#A0522D',
+    color: '#75428F',
+    markerColor: '#75428F',
   },
   bar: {
     label: 'Bar',
     icon: Beer,
-    color: '#00CEC9',
-    markerColor: '#00CEC9',
+    color: '#533C88',
+    markerColor: '#533C88',
   },
   pizzeria: {
     label: 'Pizzeria',
     icon: Pizza,
-    color: '#FF6B6B',
-    markerColor: '#FF6B6B',
+    color: '#A91963',
+    markerColor: '#A91963',
   },
   asiatique: {
     label: 'Asiatique',
-    icon: Soup,
-    color: '#FF9FF3',
-    markerColor: '#FF9FF3',
+    icon: Noodles,
+    color: '#8E3478',
+    markerColor: '#8E3478',
   },
   sushi: {
     label: 'Sushi',
-    icon: JapaneseYen,
-    color: '#F8A5C2',
-    markerColor: '#F8A5C2',
+    icon: Sushi,
+    color: '#C52B82',
+    markerColor: '#C52B82',
   },
   kebab: {
     label: 'Kebab',
-    icon: Flame,
-    color: '#F39C12',
-    markerColor: '#F39C12',
+    icon: Kebab,
+    color: '#6A3894',
+    markerColor: '#6A3894',
   },
   patisserie: {
     label: 'Pâtisserie',
     icon: Cake,
-    color: '#E056A0',
-    markerColor: '#E056A0',
+    color: '#D93491',
+    markerColor: '#D93491',
   },
   autre: {
     label: 'Autre',
     icon: Store,
-    color: '#636E72',
-    markerColor: '#636E72',
+    color: '#665C75',
+    markerColor: '#665C75',
   },
 };
 

@@ -1,248 +1,228 @@
-import React, { useRef } from 'react';
-import { View, Text, Image, StyleSheet, TouchableWithoutFeedback, Animated } from 'react-native';
-import { Calendar, Heart, MapPin, Star } from 'lucide-react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import { BlurView } from 'expo-blur';
+import React from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image } from 'expo-image';
+import { ChevronRight, MapPin, Navigation2, Star, UsersRound } from './FlaticonIcon';
+
 import { Restaurant } from '../types';
 import { CATEGORIES } from '../constants/categories';
 import { useTheme } from '../theme/ThemeProvider';
-import { Spacing, BorderRadius, FontSize, FontFamily, Shadows } from '../constants/theme';
+import {
+  FontFamily,
+  FontSize,
+  getSourceColor,
+  isSourceColorKey,
+  sourceColorKeyFor,
+  Shadows,
+  Spacing,
+} from '../constants/theme';
+import PlaceArtwork from './PlaceArtwork';
+import { priceBandLabel } from '../domain/priceBands';
 
-interface Props {
+type Props = {
   restaurant: Restaurant;
   onPress: () => void;
-}
+  compact?: boolean;
+  variant?: 'default' | 'collection';
+  /** Optional value supplied by a screen that already has a location fix. */
+  travelLabel?: string;
+};
 
-export default function RestaurantCard({ restaurant, onPress }: Props) {
+/**
+ * A single, glanceable surface: the image anchors the scan and the source
+ * line keeps imported recommendations distinct without decorative rails.
+ */
+export default function RestaurantCard({ restaurant, onPress, compact = false, variant = 'default', travelLabel }: Props) {
   const { colors, isDark } = useTheme();
-  const cat = CATEGORIES[restaurant.category];
-  const Icon = cat.icon;
-  const scale = useRef(new Animated.Value(1)).current;
-
-  const handlePressIn = () => {
-    Animated.spring(scale, {
-      toValue: 0.95,
-      useNativeDriver: true,
-      speed: 20,
-      bounciness: 5,
-    }).start();
-  };
-
-  const handlePressOut = () => {
-    Animated.spring(scale, {
-      toValue: 1,
-      useNativeDriver: true,
-      speed: 20,
-      bounciness: 5,
-    }).start();
-  };
-
-  const priceText = () => {
-    if (restaurant.priceMin != null && restaurant.priceMax != null) {
-      return `${restaurant.priceMin}€ – ${restaurant.priceMax}€`;
-    }
-    if (restaurant.priceLevel) {
-      return '€'.repeat(restaurant.priceLevel);
-    }
-    return null;
-  };
-
-  const visitedText = () => {
-    if (!restaurant.visitedAt) return null;
-    const date = new Date(restaurant.visitedAt);
-    if (Number.isNaN(date.getTime())) return null;
-    return date.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' });
-  };
-
-  const metaItems = [
-    restaurant.rating ? { key: 'rating', icon: Star, label: `${restaurant.rating}/5`, color: '#FBBF24', fill: '#FBBF24' } : null,
-    restaurant.wouldReturn ? { key: 'return', icon: Heart, label: 'À refaire', color: '#34D399', fill: '#34D399' } : null,
-    visitedText() ? { key: 'visited', icon: Calendar, label: visitedText()!, color: 'rgba(255,255,255,0.8)', fill: 'transparent' } : null,
-  ].filter(Boolean) as { key: string; icon: typeof Star; label: string; color: string; fill: string }[];
+  const collectionLayout = variant === 'collection';
+  const category = CATEGORIES[restaurant.category] || CATEGORIES.autre;
+  const imported = restaurant.origin?.kind === 'imported';
+  const friendSource = imported ? restaurant.origin : restaurant.sources?.[0];
+  const sourceKey = isSourceColorKey(friendSource?.sourceColorKey)
+    ? friendSource.sourceColorKey
+    : sourceColorKeyFor(friendSource?.ownerId || friendSource?.ownerName || restaurant.id);
+  const sourceColor = getSourceColor(sourceKey, isDark ? 'dark' : 'light');
+  const price = priceBandLabel(restaurant);
 
   return (
-    <TouchableWithoutFeedback
+    <Pressable
       onPress={onPress}
-      onPressIn={handlePressIn}
-      onPressOut={handlePressOut}
+      accessibilityRole="button"
+      accessibilityLabel={`Ouvrir ${restaurant.name}`}
+      style={({ pressed }) => [
+        styles.row,
+        compact && styles.rowCompact,
+        collectionLayout && styles.rowCollection,
+        Shadows.hard,
+        { backgroundColor: colors.surface, borderColor: colors.border, opacity: pressed ? 0.68 : 1 },
+      ]}
     >
-      <Animated.View 
-        style={[
-          styles.card, 
-          Shadows.md,
-          { transform: [{ scale }] }
-        ]}
-      >
-        {restaurant.images.length > 0 ? (
-          <Image source={{ uri: restaurant.images[0] }} style={styles.image} />
-        ) : (
-          <View style={[styles.image, styles.placeholder, { backgroundColor: colors.surfaceLight }]}>
-            <Icon size={64} color={cat.color} strokeWidth={1} opacity={0.2} />
-          </View>
-        )}
-        
-        {/* Dark overlay for text readability */}
-        <LinearGradient
-          colors={['transparent', 'rgba(0,0,0,0.8)']}
-          style={StyleSheet.absoluteFillObject}
-          start={{ x: 0.5, y: 0 }}
-          end={{ x: 0.5, y: 1 }}
+      {restaurant.images?.[0] ? (
+        <Image
+          source={restaurant.images[0]}
+          style={[styles.image, compact && styles.imageCompact, collectionLayout && styles.imageCollection]}
+          contentFit="cover"
+          transition={160}
+          accessibilityLabel={`Photo de ${restaurant.name}`}
         />
+      ) : (
+        <PlaceArtwork restaurant={restaurant} compact={compact} style={[styles.image, compact && styles.imageCompact, collectionLayout && styles.imageCollection]} />
+      )}
 
-        <View style={styles.infoContainer}>
-            <BlurView intensity={isDark ? 50 : 80} tint="dark" style={styles.glassPanel}>
-              <View style={styles.info}>
-                <View style={styles.topRow}>
-                  <Text style={[styles.name, { color: '#FFFFFF' }]} numberOfLines={1}>
-                    {restaurant.name}
-                  </Text>
-                  <View style={[styles.badge, { backgroundColor: cat.color + '40', borderColor: cat.color + '60' }]}>
-                    <Icon size={12} color={'#FFF'} strokeWidth={2.5} style={{ marginRight: 4 }} />
-                    <Text style={[styles.badgeText, { color: '#FFF' }]}>
-                      {cat.label}
-                    </Text>
-                  </View>
-                </View>
-                {restaurant.address ? (
-                  <View style={styles.addressContainer}>
-                    <MapPin size={12} color={'rgba(255,255,255,0.6)'} style={{ marginRight: 4 }} />
-                    <Text style={[styles.address, { color: 'rgba(255,255,255,0.7)' }]} numberOfLines={1}>
-                      {restaurant.address}
-                    </Text>
-                  </View>
-                ) : null}
-                {metaItems.length > 0 ? (
-                  <View style={styles.metaRow}>
-                    {metaItems.map((item) => {
-                      const MetaIcon = item.icon;
-                      return (
-                        <View key={item.key} style={styles.metaPill}>
-                          <MetaIcon size={12} color={item.color} fill={item.fill} style={{ marginRight: 4 }} />
-                          <Text style={styles.metaText}>{item.label}</Text>
-                        </View>
-                      );
-                    })}
-                  </View>
-                ) : null}
-                <View style={styles.bottomRow}>
-                  {priceText() ? (
-                    <Text style={[styles.price, { color: '#FFD700' }]}>{priceText()}</Text>
-                  ) : null}
-                  {restaurant.description ? (
-                    <Text style={[styles.desc, { color: 'rgba(255,255,255,0.5)' }]} numberOfLines={2}>
-                      {restaurant.description}
-                    </Text>
-                  ) : restaurant.signatureDish ? (
-                    <Text style={[styles.desc, { color: 'rgba(255,255,255,0.5)' }]} numberOfLines={2}>
-                      À goûter: {restaurant.signatureDish}
-                    </Text>
-                  ) : null}
-                </View>
-              </View>
-            </BlurView>
+      <View style={styles.content}>
+        {friendSource ? (
+          <View style={styles.sourceLine}>
+            <UsersRound size={13} color={sourceColor} strokeWidth={2} />
+            <Text style={[styles.sourceText, collectionLayout && styles.sourceTextCollection, { color: sourceColor }]} numberOfLines={1}>
+              {imported ? 'Partagée par' : 'Aussi chez'} {friendSource.ownerName || 'un ami'}
+            </Text>
+          </View>
+        ) : null}
+        <Text style={[styles.name, collectionLayout && styles.nameCollection, { color: colors.textPrimary }]} numberOfLines={1}>
+          {restaurant.name}
+        </Text>
+        <Text style={[styles.category, collectionLayout && styles.categoryCollection, { color: colors.textSecondary }]} numberOfLines={1}>
+          {category.label}
+        </Text>
+        {restaurant.address ? (
+          <View style={styles.addressRow}>
+            <MapPin size={13} color={colors.textMuted} />
+            <Text style={[styles.address, collectionLayout && styles.addressCollection, { color: colors.textMuted }]} numberOfLines={1}>
+              {restaurant.address}
+            </Text>
+          </View>
+        ) : null}
+        <View style={styles.metaRow}>
+          {restaurant.rating ? (
+            <View style={styles.metaItem}>
+              <Star size={13} color={colors.accentYellow} fill={colors.accentYellow} />
+              <Text style={[styles.metaText, collectionLayout && styles.metaTextCollection, { color: colors.textSecondary }]}>{restaurant.rating}/5</Text>
+            </View>
+          ) : null}
+          {price ? <Text style={[styles.metaText, collectionLayout && styles.metaTextCollection, { color: colors.textSecondary }]}>{price}</Text> : null}
+          {travelLabel ? (
+            <View style={styles.metaItem}>
+              <Navigation2 size={13} color={colors.accent} />
+              <Text style={[styles.metaText, collectionLayout && styles.metaTextCollection, { color: colors.accent }]} numberOfLines={1}>{travelLabel}</Text>
+            </View>
+          ) : restaurant.location ? (
+            <View style={styles.metaItem}>
+              <Navigation2 size={13} color={colors.textMuted} />
+              <Text style={[styles.metaText, collectionLayout && styles.metaTextCollection, { color: colors.textMuted }]}>Itinéraire</Text>
+            </View>
+          ) : null}
+          {restaurant.signatureDish ? (
+            <Text style={[styles.dish, collectionLayout && styles.dishCollection, { color: colors.textMuted }]} numberOfLines={1}>{restaurant.signatureDish}</Text>
+          ) : null}
         </View>
-      </Animated.View>
-    </TouchableWithoutFeedback>
+      </View>
+      <ChevronRight size={18} color={colors.textMuted} />
+    </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  card: {
-    borderRadius: BorderRadius.xxl,
-    marginHorizontal: Spacing.xl,
-    marginBottom: Spacing.xl,
-    height: 280,
-    backgroundColor: '#000',
-    overflow: 'hidden',
+  row: {
+    minHeight: 116,
+    marginHorizontal: Spacing.lg,
+    marginBottom: Spacing.md,
+    padding: Spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderRadius: 12,
+  },
+  rowCompact: {
+    minHeight: 92,
+    marginHorizontal: 0,
+    marginBottom: Spacing.sm,
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.sm,
+    borderRadius: 10,
+  },
+  rowCollection: {
+    minHeight: 140,
+    marginHorizontal: 0,
+    marginBottom: Spacing.lg,
+    padding: Spacing.lg,
+    borderRadius: 14,
   },
   image: {
-    ...StyleSheet.absoluteFillObject,
-    width: '100%',
-    height: '100%',
+    width: 92,
+    height: 92,
+    borderRadius: 12,
   },
-  placeholder: {
-    alignItems: 'center',
-    justifyContent: 'center',
+  imageCompact: {
+    width: 72,
+    height: 72,
+    borderRadius: 10,
   },
-  infoContainer: {
-    position: 'absolute',
-    bottom: Spacing.md,
-    left: Spacing.md,
-    right: Spacing.md,
-    borderRadius: BorderRadius.xl,
-    overflow: 'hidden',
+  imageCollection: {
+    width: 104,
+    height: 104,
+    borderRadius: 14,
   },
-  glassPanel: {
-    padding: Spacing.md,
-  },
-  info: {
-    zIndex: 2,
-  },
-  topRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: Spacing.xs,
-  },
-  name: {
-    fontSize: FontSize.lg,
-    fontFamily: FontFamily.bold,
-    letterSpacing: -0.5,
+  content: {
     flex: 1,
-    marginRight: Spacing.sm,
+    minWidth: 0,
+    paddingHorizontal: Spacing.md,
   },
-  badge: {
+  sourceLine: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: Spacing.xs - 2,
-    borderRadius: BorderRadius.full,
-    borderWidth: 1,
+    gap: 5,
+    marginBottom: 2,
   },
-  badgeText: {
-    fontSize: FontSize.xs,
+  sourceText: {
+    flex: 1,
     fontFamily: FontFamily.semiBold,
+    fontSize: FontSize.xs,
   },
-  addressContainer: {
+  sourceTextCollection: { fontSize: FontSize.sm },
+  name: {
+    fontFamily: FontFamily.semiBold,
+    fontSize: FontSize.md,
+    lineHeight: 21,
+  },
+  nameCollection: { fontSize: FontSize.lg, lineHeight: 24 },
+  category: {
+    marginTop: 1,
+    fontFamily: FontFamily.medium,
+    fontSize: FontSize.xs,
+  },
+  categoryCollection: { fontSize: FontSize.sm },
+  addressRow: {
+    marginTop: 5,
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: Spacing.sm,
+    gap: 4,
   },
   address: {
-    fontSize: FontSize.sm,
-    fontFamily: FontFamily.medium,
     flex: 1,
+    fontFamily: FontFamily.regular,
+    fontSize: FontSize.xs,
   },
-  bottomRow: {
-    marginTop: Spacing.xs,
-  },
+  addressCollection: { fontSize: FontSize.sm },
   metaRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-    marginBottom: Spacing.xs,
-  },
-  metaPill: {
+    minHeight: 19,
+    marginTop: 5,
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: BorderRadius.full,
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 4,
-    backgroundColor: 'rgba(255,255,255,0.12)',
+    gap: Spacing.sm,
+  },
+  metaItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
   metaText: {
-    color: 'rgba(255,255,255,0.88)',
-    fontSize: 11,
-    fontFamily: FontFamily.bold,
+    fontFamily: FontFamily.medium,
+    fontSize: FontSize.xs,
   },
-  price: {
-    fontSize: FontSize.sm,
-    fontFamily: FontFamily.bold,
-    marginBottom: Spacing.xs,
-  },
-  desc: {
-    fontSize: FontSize.sm,
+  metaTextCollection: { fontSize: FontSize.sm },
+  dish: {
+    flex: 1,
     fontFamily: FontFamily.regular,
-    lineHeight: 20,
+    fontSize: FontSize.xs,
   },
+  dishCollection: { fontSize: FontSize.sm },
 });

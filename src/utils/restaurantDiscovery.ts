@@ -1,11 +1,12 @@
 import { Restaurant, RestaurantCategory } from '../types';
+import { priceBandForRestaurant } from '../domain/priceBands';
 
 export type RestaurantSortOption = 'recent' | 'name' | 'price_low' | 'price_high' | 'rating' | 'visited';
 export type BudgetFilter = 'all' | 'low' | 'mid' | 'high' | 'unknown';
 
 export interface RestaurantFilters {
   query: string;
-  category: RestaurantCategory | null;
+  categories: RestaurantCategory[];
   budget: BudgetFilter;
   photosOnly: boolean;
   revisitOnly: boolean;
@@ -18,6 +19,10 @@ function normalized(text?: string): string {
 }
 
 function effectivePrice(restaurant: Restaurant): number | null {
+  const band = priceBandForRestaurant(restaurant);
+  if (band === '1-10') return 5;
+  if (band === '11-20') return 15;
+  if (band === '21-30') return 25;
   if (restaurant.priceMin != null && restaurant.priceMax != null) {
     return (restaurant.priceMin + restaurant.priceMax) / 2;
   }
@@ -31,9 +36,9 @@ function matchBudget(price: number | null, budget: BudgetFilter): boolean {
   if (budget === 'all') return true;
   if (budget === 'unknown') return price == null;
   if (price == null) return false;
-  if (budget === 'low') return price < 20;
-  if (budget === 'mid') return price >= 20 && price <= 40;
-  return price > 40;
+  if (budget === 'low') return price <= 10;
+  if (budget === 'mid') return price > 10 && price <= 20;
+  return price > 20 && price <= 30;
 }
 
 export function filterAndSortRestaurants(
@@ -41,6 +46,7 @@ export function filterAndSortRestaurants(
   filters: RestaurantFilters
 ): Restaurant[] {
   const q = normalized(filters.query);
+  const selectedCategories = filters.categories || [];
 
   const filtered = restaurants.filter((restaurant) => {
     const matchesQuery =
@@ -52,7 +58,7 @@ export function filterAndSortRestaurants(
       (restaurant.tags || []).some((tag) => normalized(tag).includes(q)) ||
       normalized(restaurant.category).includes(q);
 
-    const matchesCategory = !filters.category || restaurant.category === filters.category;
+    const matchesCategory = selectedCategories.length === 0 || selectedCategories.includes(restaurant.category);
     const matchesPhotos = !filters.photosOnly || restaurant.images.length > 0;
     const matchesPrice = matchBudget(effectivePrice(restaurant), filters.budget);
     const matchesRevisit = !filters.revisitOnly || restaurant.wouldReturn === true;

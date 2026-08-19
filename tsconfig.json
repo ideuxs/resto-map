@@ -1,11 +1,14 @@
 {
   "extends": "expo/tsconfig.base",
   "compilerOptions": {
-<<<<<<< HEAD
-    "strict": true
-=======
     "strict": true,
     "jsx": "react-native"
->>>>>>> master
-  }
+  },
+  "include": [
+    "App.tsx",
+    "index.ts",
+    "src/**/*.ts",
+    "src/**/*.tsx",
+    "services/geocode.ts"
+  ]
 }

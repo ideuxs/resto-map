@@ -1,255 +1,130 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  StyleSheet,
-  ScrollView,
-  Image,
+  ActivityIndicator,
   Alert,
+  Image,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
-  ActivityIndicator,
-  StatusBar,
-  Animated,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
 } from 'react-native';
-import * as ImagePicker from 'expo-image-picker';
-import * as ExpoLocation from 'expo-location';
-import { v4 as uuidv4 } from 'uuid';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Camera, MapPin, Search, X, ArrowLeft, Check, Star, Heart, Calendar, Tag } from 'lucide-react-native';
-import { BlurView } from 'expo-blur';
+import {
+  ArrowLeft,
+  ArrowRight,
+  Camera,
+  Check,
+  LocateFixed,
+  MapPin,
+  X,
+} from '../components/FlaticonIcon';
+import * as ImagePicker from 'expo-image-picker';
+import * as Location from 'expo-location';
+import { v4 as uuidv4 } from 'uuid';
 
-import { RestaurantsStackParamList, Restaurant, RestaurantCategory } from '../types';
-import { saveRestaurant } from '../storage/storage';
-import { saveImageLocally, deleteImage } from '../storage/imageStorage';
+import { PriceBand, Restaurant, RestaurantCategory, RestaurantsStackParamList } from '../types';
+import { addRestaurantToCollection, saveRestaurant } from '../storage/storage';
+import { saveImageLocally } from '../storage/imageStorage';
+import { geoFromAddress } from '../../services/geocode';
 import { CATEGORY_LIST } from '../constants/categories';
 import { useTheme } from '../theme/ThemeProvider';
-import { Spacing, BorderRadius, FontSize, FontFamily, Shadows } from '../constants/theme';
+import { BorderRadius, FontFamily, FontSize, Shadows, Spacing } from '../constants/theme';
+import { PRICE_BANDS, priceBandBounds, priceBandForRestaurant } from '../domain/priceBands';
 
 type Props = NativeStackScreenProps<RestaurantsStackParamList, 'AddRestaurant'>;
 
-function formatDateForInput(value?: string): string {
-  if (!value) return '';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '';
-  const day = String(date.getUTCDate()).padStart(2, '0');
-  const month = String(date.getUTCMonth() + 1).padStart(2, '0');
-  const year = date.getUTCFullYear();
-  return `${day}/${month}/${year}`;
-}
-
 export default function AddRestaurantScreen({ route, navigation }: Props) {
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const editing = route.params?.restaurant;
-
-  const [name, setName] = useState('');
-  const [category, setCategory] = useState<RestaurantCategory>('restaurant');
-  const [address, setAddress] = useState('');
-  const [description, setDescription] = useState('');
-  const [visitedAt, setVisitedAt] = useState('');
-  const [rating, setRating] = useState(0);
-  const [wouldReturn, setWouldReturn] = useState(false);
-  const [signatureDish, setSignatureDish] = useState('');
-  const [tagsText, setTagsText] = useState('');
-  const [priceMin, setPriceMin] = useState('');
-  const [priceMax, setPriceMax] = useState('');
-  const [priceLevel, setPriceLevel] = useState(0);
-  const [images, setImages] = useState<string[]>([]);
-  const [latitude, setLatitude] = useState<number | null>(null);
-  const [longitude, setLongitude] = useState<number | null>(null);
-  const [locationAddress, setLocationAddress] = useState('');
-  const [locating, setLocating] = useState(false);
+  const initialCollectionId = route.params?.collectionId;
+  const [step, setStep] = useState<1 | 2>(1);
+  const [name, setName] = useState(editing?.name || '');
+  const [category, setCategory] = useState<RestaurantCategory>(editing?.category || 'restaurant');
+  const [address, setAddress] = useState(editing?.address || '');
+  const [coordinates, setCoordinates] = useState(editing?.location);
+  const [priceBand, setPriceBand] = useState<PriceBand | null>(() => editing ? priceBandForRestaurant(editing) : null);
+  const [description, setDescription] = useState(editing?.description || '');
+  const [tagsText, setTagsText] = useState((editing?.tags || []).join(', '));
+  const [images, setImages] = useState<string[]>(editing?.images || []);
+  const [nameTouched, setNameTouched] = useState(false);
+  const [locationLoading, setLocationLoading] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    if (editing) {
-      setName(editing.name);
-      setCategory(editing.category);
-      setAddress(editing.address || '');
-      setDescription(editing.description || '');
-      setVisitedAt(formatDateForInput(editing.visitedAt));
-      setRating(editing.rating || 0);
-      setWouldReturn(editing.wouldReturn || false);
-      setSignatureDish(editing.signatureDish || '');
-      setTagsText((editing.tags || []).join(', '));
-      setPriceMin(editing.priceMin?.toString() || '');
-      setPriceMax(editing.priceMax?.toString() || '');
-      setPriceLevel(editing.priceLevel || 0);
-      setImages([...editing.images]);
-      if (editing.location) {
-        setLatitude(editing.location.latitude);
-        setLongitude(editing.location.longitude);
-        setLocationAddress(editing.location.address || '');
+  const locationLabel = useMemo(() => {
+    if (coordinates && address) return 'Adresse et position enregistrées';
+    if (coordinates) return 'Position enregistrée';
+    if (address) return 'Adresse à localiser';
+    return 'Ajoutez une adresse ou utilisez votre position';
+  }, [coordinates, address]);
+
+  const continueToDetails = async () => {
+    setNameTouched(true);
+    if (!name.trim()) return;
+    if (address.trim() && !coordinates) {
+      setLocationLoading(true);
+      try {
+        const result = await geoFromAddress(address.trim());
+        if (result) setCoordinates({ latitude: result.lat, longitude: result.lng, address: address.trim() });
+      } catch {
+        // The address is still valid text; the restaurant simply won't appear on the map yet.
+      } finally {
+        setLocationLoading(false);
       }
     }
-  }, []);
+    setStep(2);
+  };
 
-  const pickImages = async () => {
-    if (images.length >= 5) {
-      Alert.alert('Maximum atteint', '5 images maximum par restaurant.');
+  const useCurrentLocation = async () => {
+    setLocationLoading(true);
+    try {
+      const permission = await Location.requestForegroundPermissionsAsync();
+      if (permission.status !== 'granted') {
+        Alert.alert('Position non autorisée', 'Autorisez RestoHub dans les réglages, ou saisissez une adresse.');
+        return;
+      }
+      const position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      const coordinate = { latitude: position.coords.latitude, longitude: position.coords.longitude };
+      setCoordinates(coordinate);
+      const reverse = await Location.reverseGeocodeAsync(coordinate);
+      const place = reverse[0];
+      if (place) {
+        const value = [place.streetNumber, place.street, place.postalCode, place.city].filter(Boolean).join(' ');
+        if (value) setAddress(value);
+      }
+    } catch {
+      Alert.alert('Position indisponible', 'Saisissez l’adresse manuellement.');
+    } finally {
+      setLocationLoading(false);
+    }
+  };
+
+  const addPhotos = async () => {
+    if (images.length >= 5) return;
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      Alert.alert('Photos non autorisées', 'Autorisez l’accès aux photos dans les réglages.');
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
       allowsMultipleSelection: true,
       selectionLimit: 5 - images.length,
-      quality: 0.8,
+      quality: 0.82,
     });
-    if (!result.canceled) {
-      const newUris: string[] = [];
-      for (const asset of result.assets) {
-        try {
-          const localUri = await saveImageLocally(asset.uri);
-          newUris.push(localUri);
-        } catch (e) {
-          console.error("Error picking image:", e);
-        }
-      }
-      setImages((prev) => [...prev, ...newUris].slice(0, 5));
-    }
+    if (result.canceled) return;
+    const saved = await Promise.all(result.assets.slice(0, 5 - images.length).map((asset) => saveImageLocally(asset.uri)));
+    setImages((current) => [...current, ...saved].slice(0, 5));
   };
 
-  const removeImage = async (uri: string) => {
-    if (!editing || !editing.images.includes(uri)) {
-      await deleteImage(uri);
-    }
-    setImages((prev) => prev.filter((u) => u !== uri));
-  };
-
-  const getMyLocation = async () => {
-    setLocating(true);
-    try {
-      const { status } = await ExpoLocation.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permission refusée', 'Activez la localisation pour utiliser cette fonctionnalité.');
-        return;
-      }
-      const loc = await ExpoLocation.getCurrentPositionAsync({});
-      setLatitude(loc.coords.latitude);
-      setLongitude(loc.coords.longitude);
-
-      const results = await ExpoLocation.reverseGeocodeAsync({
-        latitude: loc.coords.latitude,
-        longitude: loc.coords.longitude,
-      });
-      if (results.length > 0) {
-        const a = results[0];
-        // Fix: Ensure all relevant address parts are included and correctly formatted
-        const addrParts = [a.name, a.street, a.city, a.region, a.postalCode, a.country].filter(Boolean);
-        const addr = addrParts.join(', ');
-        setLocationAddress(addr);
-      }
-    } catch (e) {
-      Alert.alert('Erreur', 'Impossible d\'obtenir la localisation.');
-    } finally {
-      setLocating(false);
-    }
-  };
-
-  const geocodeAddress = async () => {
-    if (!address.trim()) {
-      Alert.alert('Adresse vide', 'Entrez une adresse pour la géolocaliser.');
-      return;
-    }
-    setLocating(true);
-    try {
-      const results = await ExpoLocation.geocodeAsync(address.trim());
-      if (results.length > 0) {
-        setLatitude(results[0].latitude);
-        setLongitude(results[0].longitude);
-        setLocationAddress(address.trim());
-        Alert.alert('Succès', 'Position trouvée !');
-      } else {
-        Alert.alert('Non trouvé', 'Impossible de géolocaliser cette adresse.');
-      }
-    } catch {
-      Alert.alert('Erreur', 'Impossible de géolocaliser cette adresse.');
-    } finally {
-      setLocating(false);
-    }
-  };
-
-  const clearLocation = () => {
-    setLatitude(null);
-    setLongitude(null);
-    setLocationAddress('');
-  };
-
-  const parseMoneyValue = (raw: string): number | undefined => {
-    const trimmed = raw.trim().replace(',', '.');
-    if (!trimmed) return undefined;
-    const parsed = Number(trimmed);
-    return Number.isFinite(parsed) ? parsed : NaN;
-  };
-
-  const parseVisitDate = (raw: string): string | undefined | null => {
-    const trimmed = raw.trim();
-    if (!trimmed) return undefined;
-
-    const normalized = trimmed.replace(/\./g, '/').replace(/-/g, '/');
-    const parts = normalized.split('/').map((part) => Number(part));
-
-    let year: number;
-    let month: number;
-    let day: number;
-
-    if (parts.length === 3 && String(parts[0]).length === 4) {
-      [year, month, day] = parts;
-    } else if (parts.length === 3) {
-      [day, month, year] = parts;
-    } else {
-      return null;
-    }
-
-    if (!year || !month || !day) return null;
-    const date = new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
-    if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) {
-      return null;
-    }
-
-    return date.toISOString();
-  };
-
-  const handleSave = async () => {
-    if (!name.trim()) {
-      Alert.alert('Nom requis', 'Le nom du restaurant est obligatoire.');
-      return;
-    }
-
-    const parsedPriceMin = parseMoneyValue(priceMin);
-    const parsedPriceMax = parseMoneyValue(priceMax);
-
-    if (Number.isNaN(parsedPriceMin) || Number.isNaN(parsedPriceMax)) {
-      Alert.alert('Prix invalide', 'Utilisez uniquement des nombres pour le budget.');
-      return;
-    }
-
-    if ((parsedPriceMin ?? 0) < 0 || (parsedPriceMax ?? 0) < 0) {
-      Alert.alert('Prix invalide', 'Le budget ne peut pas être négatif.');
-      return;
-    }
-
-    if (parsedPriceMin != null && parsedPriceMax != null && parsedPriceMin > parsedPriceMax) {
-      Alert.alert('Budget incohérent', 'Le prix minimum doit être inférieur ou égal au prix maximum.');
-      return;
-    }
-
-    const parsedVisitedAt = parseVisitDate(visitedAt);
-    if (parsedVisitedAt === null) {
-      Alert.alert('Date invalide', 'Utilisez le format JJ/MM/AAAA ou AAAA-MM-JJ.');
-      return;
-    }
-
-    const tags = tagsText
-      .split(',')
-      .map((tag) => tag.trim())
-      .filter(Boolean)
-      .slice(0, 8);
-
+  const submit = async () => {
+    if (saving) return;
     setSaving(true);
     try {
       const now = new Date().toISOString();
@@ -258,614 +133,252 @@ export default function AddRestaurantScreen({ route, navigation }: Props) {
         name: name.trim(),
         category,
         address: address.trim() || undefined,
+        location: coordinates ? { ...coordinates, address: address.trim() || coordinates.address } : undefined,
+        priceBand: priceBand || undefined,
+        priceMin: priceBand ? priceBandBounds(priceBand)?.min : undefined,
+        priceMax: priceBand ? priceBandBounds(priceBand)?.max : undefined,
         description: description.trim() || undefined,
-        visitedAt: parsedVisitedAt,
-        rating: rating || undefined,
-        wouldReturn: wouldReturn || undefined,
-        signatureDish: signatureDish.trim() || undefined,
-        tags,
-        priceMin: parsedPriceMin,
-        priceMax: parsedPriceMax,
-        priceLevel: priceLevel || undefined,
+        tags: tagsText.split(',').map((tag) => tag.trim()).filter(Boolean).slice(0, 8),
         images,
-        location:
-          latitude != null && longitude != null
-            ? { latitude, longitude, address: locationAddress || undefined }
-            : undefined,
+        origin: editing?.origin || { kind: 'personal' },
         createdAt: editing?.createdAt || now,
         updatedAt: now,
       };
-      await saveRestaurant(restaurant);
+      const savedPlaceId = await saveRestaurant(restaurant);
+      if (initialCollectionId) await addRestaurantToCollection(initialCollectionId, savedPlaceId);
       navigation.goBack();
+    } catch {
+      Alert.alert('Enregistrement impossible', 'Vérifiez les informations puis réessayez.');
     } finally {
       setSaving(false);
     }
   };
 
-  const inputContainerStyle = [
-    styles.inputContainer,
-    { backgroundColor: colors.surface, borderColor: colors.border }
-  ];
-
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor="transparent" translucent />
-
-      {/* Custom Header */}
-      <BlurView intensity={isDark ? 50 : 90} tint={isDark ? "dark" : "light"} style={[styles.header, { paddingTop: insets.top, height: insets.top + 90 }]}>
-        <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-          <ArrowLeft size={24} color={colors.textPrimary} />
-        </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.textPrimary }]} numberOfLines={1}>
-          {editing ? 'Modifier l\'adresse' : 'Nouveau resto'}
-        </Text>
-        <TouchableOpacity
-          style={[styles.saveBtnTop, { backgroundColor: colors.primary }, Shadows.sm]}
-          onPress={handleSave}
-          disabled={saving || !name.trim()}
+    <KeyboardAvoidingView style={[styles.screen, { backgroundColor: colors.background }]} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <View style={[styles.topBar, { paddingTop: insets.top, borderColor: colors.border }]}>
+        <Pressable
+          onPress={() => step === 2 ? setStep(1) : navigation.goBack()}
+          accessibilityLabel={step === 2 ? 'Revenir à l’étape précédente' : 'Fermer'}
+          style={styles.topAction}
         >
-          {saving ? <ActivityIndicator size="small" color="#FFF" /> : <Check size={20} color="#FFF" strokeWidth={3} />}
-        </TouchableOpacity>
-      </BlurView>
+          <ArrowLeft size={23} color={colors.textPrimary} />
+        </Pressable>
+        <View style={styles.topCopy}>
+          <Text style={[styles.topTitle, { color: colors.textPrimary }]}>{editing ? 'Modifier l’adresse' : 'Ajouter une adresse'}</Text>
+          <Text style={[styles.stepText, { color: colors.textMuted }]}>{step} sur 2 · {step === 1 ? 'Essentiel' : 'Détails facultatifs'}</Text>
+        </View>
+        <Pressable onPress={() => navigation.goBack()} accessibilityLabel="Annuler" style={styles.topAction}>
+          <X size={22} color={colors.textPrimary} />
+        </Pressable>
+      </View>
+      <View style={[styles.progressTrack, { backgroundColor: colors.surfaceMuted }]}>
+        <View style={[styles.progressValue, { width: step === 1 ? '50%' : '100%', backgroundColor: colors.accent }]} />
+      </View>
 
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      <ScrollView
+        contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 104 }]}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+        automaticallyAdjustKeyboardInsets
+        showsVerticalScrollIndicator={false}
       >
-        <ScrollView
-          style={styles.scroll}
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={[styles.scrollContent, { paddingTop: 10, paddingBottom: insets.bottom + 100 }]}
-        >
-          {/* Main Info Section */}
-          <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Informations générales</Text>
-
-          <Text style={[styles.label, { color: colors.textSecondary }]}>Nom du lieu *</Text>
-          <View style={inputContainerStyle}>
+        {step === 1 ? (
+          <>
+            <Text style={[styles.heading, { color: colors.textPrimary }]}>Les informations pour le retrouver</Text>
+            <FieldLabel label="Nom" required />
             <TextInput
-              style={[styles.input, { color: colors.textPrimary }]}
+              autoFocus={!editing}
               value={name}
               onChangeText={setName}
-              placeholder="Ex: La Belle Assiette..."
+              onBlur={() => setNameTouched(true)}
+              onSubmitEditing={Keyboard.dismiss}
+              returnKeyType="done"
+              blurOnSubmit
+              placeholder="Ex. Mokonuts"
               placeholderTextColor={colors.textMuted}
-              selectionColor={colors.primary}
+              selectionColor={colors.accent}
+              accessibilityLabel="Nom du restaurant"
+              style={[styles.input, Shadows.hard, { backgroundColor: colors.surface, borderColor: nameTouched && !name.trim() ? colors.danger : colors.textPrimary, color: colors.textPrimary }]}
             />
-          </View>
+            {nameTouched && !name.trim() ? <Text style={[styles.error, { color: colors.danger }]}>Le nom est nécessaire pour continuer.</Text> : null}
 
-          {/* Category Selector */}
-          <Text style={[styles.label, { color: colors.textSecondary }]}>Catégorie</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.catRow} contentContainerStyle={{ paddingRight: Spacing.xl }}>
-            {CATEGORY_LIST.map((c) => {
-              const Icon = c.icon;
-              const isSelected = category === c.value;
-              return (
-                <TouchableOpacity
-                  key={c.value}
-                  activeOpacity={0.8}
-                  style={[
-                    styles.catChip,
-                    { backgroundColor: colors.surface },
-                    isSelected && { backgroundColor: c.color },
-                    Shadows.sm
-                  ]}
-                  onPress={() => setCategory(c.value)}
-                >
-                  <Icon size={16} color={isSelected ? '#FFF' : colors.textSecondary} style={{ marginRight: 6 }} />
-                  <Text
-                    style={[
-                      styles.catLabel,
-                      { color: colors.textSecondary },
-                      isSelected && { color: '#FFF', fontFamily: FontFamily.bold },
+            <FieldLabel label="Type" required />
+            <View style={styles.categoryGrid}>
+              {CATEGORY_LIST.map((item) => {
+                const Icon = item.icon;
+                const selected = category === item.value;
+                return (
+                  <Pressable
+                    key={item.value}
+                    onPress={() => setCategory(item.value)}
+                    accessibilityRole="radio"
+                    accessibilityState={{ selected }}
+                    style={({ pressed }) => [
+                      styles.categoryOption,
+                      { opacity: pressed ? 0.6 : 1 },
                     ]}
                   >
-                    {c.label}
-                  </Text>
-                </TouchableOpacity>
-              )
-            })}
-          </ScrollView>
+                    <View
+                      pointerEvents="none"
+                      style={[
+                        StyleSheet.absoluteFillObject,
+                        styles.optionSurface,
+                        Shadows.hard,
+                        { backgroundColor: selected ? `${item.color}18` : colors.surface, borderColor: selected ? item.color : colors.textPrimary },
+                      ]}
+                    />
+                    <Icon size={19} color={selected ? item.color : colors.textSecondary} />
+                    <Text style={[styles.categoryText, { color: selected ? colors.textPrimary : colors.textSecondary }]} numberOfLines={1}>{item.label}</Text>
+                  </Pressable>
+                );
+              })}
+            </View>
 
-          {/* Location Section */}
-          <Text style={[styles.sectionTitle, { color: colors.textPrimary, marginTop: Spacing.xxl }]}>Emplacement</Text>
-          <Text style={[styles.label, { color: colors.textSecondary }]}>Adresse postale</Text>
-          <View style={[styles.addressRow]}>
-            <View style={[inputContainerStyle, { flex: 1 }]}>
+            <FieldLabel label="Adresse ou position" />
+            <View style={[styles.addressField, Shadows.hard, { backgroundColor: colors.surface, borderColor: colors.textPrimary }]}>
+              <MapPin size={20} color={coordinates ? colors.accentGreen : colors.textMuted} />
               <TextInput
-                style={[styles.input, { color: colors.textPrimary }]}
                 value={address}
-                onChangeText={setAddress}
-                placeholder="Ex: 5 Rue de la Paix, Paris..."
+                onChangeText={(value) => { setAddress(value); setCoordinates(undefined); }}
+                onSubmitEditing={Keyboard.dismiss}
+                returnKeyType="done"
+                blurOnSubmit
+                placeholder="12 rue… ou nom de la ville"
                 placeholderTextColor={colors.textMuted}
-                selectionColor={colors.primary}
+                selectionColor={colors.accent}
+                accessibilityLabel="Adresse"
+                style={[styles.addressInput, { color: colors.textPrimary }]}
               />
             </View>
-            <TouchableOpacity
-              activeOpacity={0.8}
-              style={[styles.roundBtn, { backgroundColor: colors.surface }, Shadows.sm]}
-              onPress={geocodeAddress}
-            >
-              <Search size={22} color={colors.primary} />
-            </TouchableOpacity>
-          </View>
-
-          {latitude !== null && longitude !== null ? (
-            <View style={[styles.locationBadge, { backgroundColor: colors.success + '15' }]}>
-              <MapPin size={16} color={colors.success} style={{ marginRight: 8 }} />
-              <Text style={[styles.locationText, { color: colors.success }]} numberOfLines={1}>
-                {locationAddress || (latitude !== null && longitude !== null ? `${latitude.toFixed(4)}, ${longitude.toFixed(4)}` : '')}
-              </Text>
-              <TouchableOpacity onPress={clearLocation}>
-                <X size={18} color={colors.success} style={{ marginLeft: 8 }} />
-              </TouchableOpacity>
+            <View style={styles.locationStatus}>
+              <Text style={[styles.helper, { color: coordinates ? colors.accentGreen : colors.textMuted }]}>{locationLabel}</Text>
+              <Pressable
+                onPress={useCurrentLocation}
+                disabled={locationLoading}
+                style={({ pressed }) => [styles.locationButton, { borderColor: colors.textPrimary, opacity: pressed ? 0.55 : 1 }]}
+              >
+                {locationLoading ? <ActivityIndicator size="small" color={colors.accent} /> : <LocateFixed size={17} color={colors.accent} />}
+                <Text style={[styles.locationButtonText, { color: colors.textPrimary }]}>Ma position</Text>
+              </Pressable>
             </View>
-          ) : (
-            <TouchableOpacity
-              style={[styles.locationAction, { backgroundColor: colors.surface }, Shadows.sm]}
-              onPress={getMyLocation}
-              disabled={locating}
-            >
-              {locating ? <ActivityIndicator size="small" color={colors.primary} /> : (
-                <>
-                  <MapPin size={18} color={colors.primary} style={{ marginRight: 8 }} />
-                  <Text style={[styles.locationActionText, { color: colors.primary }]}>Utiliser ma position actuelle</Text>
-                </>
-              )}
-            </TouchableOpacity>
-          )}
+          </>
+        ) : (
+          <>
+            <Text style={[styles.heading, { color: colors.textPrimary }]}>Complétez seulement ce qui vous sert</Text>
 
-          {/* Pricing Section */}
-          <Text style={[styles.sectionTitle, { color: colors.textPrimary, marginTop: Spacing.xxl }]}>Détails & Budget</Text>
-
-          <View style={styles.priceGrid}>
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.label, { color: colors.textSecondary }]}>Prix Min (€)</Text>
-              <View style={inputContainerStyle}>
-                <TextInput
-                  style={[styles.input, { color: colors.textPrimary }]}
-                  value={priceMin}
-                  onChangeText={setPriceMin}
-                  placeholder="0"
-                  placeholderTextColor={colors.textMuted}
-                  keyboardType="numeric"
-                  selectionColor={colors.primary}
-                />
-              </View>
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.label, { color: colors.textSecondary }]}>Prix Max (€)</Text>
-              <View style={inputContainerStyle}>
-                <TextInput
-                  style={[styles.input, { color: colors.textPrimary }]}
-                  value={priceMax}
-                  onChangeText={setPriceMax}
-                  placeholder="50"
-                  placeholderTextColor={colors.textMuted}
-                  keyboardType="numeric"
-                  selectionColor={colors.primary}
-                />
-              </View>
-            </View>
-          </View>
-
-          <Text style={[styles.label, { color: colors.textSecondary }]}>Niveau de prix</Text>
-          <View style={styles.priceLevelRow}>
-            {[1, 2, 3, 4].map((level) => {
-              const isSelected = priceLevel === level;
-              return (
-                <TouchableOpacity
-                  key={level}
-                  activeOpacity={0.8}
-                  style={[
-                    styles.priceLevelBtn,
-                    { backgroundColor: colors.surface },
-                    isSelected && { backgroundColor: colors.primary },
-                    Shadows.sm
-                  ]}
-                  onPress={() => setPriceLevel(isSelected ? 0 : level)}
-                >
-                  <Text
-                    style={[
-                      styles.priceLevelText,
-                      { color: colors.textSecondary },
-                      isSelected && { color: '#FFF', fontFamily: FontFamily.bold },
-                    ]}
+            <FieldLabel label="Budget" />
+            <View style={styles.priceRow}>
+              {PRICE_BANDS.map((band) => {
+                const selected = priceBand === band.id;
+                return (
+                  <Pressable
+                    key={band.id}
+                    onPress={() => setPriceBand(selected ? null : band.id)}
+                    style={({ pressed }) => [styles.priceOption, { opacity: pressed ? 0.6 : 1 }]}
                   >
-                    {'€'.repeat(level)}
-                  </Text>
-                </TouchableOpacity>
-              )
-            })}
-          </View>
-
-          {/* Visit Journal */}
-          <Text style={[styles.sectionTitle, { color: colors.textPrimary, marginTop: Spacing.xxl }]}>Votre passage</Text>
-
-          <Text style={[styles.label, { color: colors.textSecondary }]}>Note personnelle</Text>
-          <View style={styles.ratingRow}>
-            {[1, 2, 3, 4, 5].map((value) => {
-              const selected = rating >= value;
-              return (
-                <TouchableOpacity
-                  key={value}
-                  activeOpacity={0.85}
-                  style={[
-                    styles.ratingBtn,
-                    { backgroundColor: selected ? colors.warning + '20' : colors.surface, borderColor: selected ? colors.warning + '70' : colors.border },
-                    Shadows.sm,
-                  ]}
-                  onPress={() => setRating(rating === value ? 0 : value)}
-                >
-                  <Star size={22} color={selected ? colors.warning : colors.textMuted} fill={selected ? colors.warning : 'transparent'} />
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-
-          <View style={styles.visitGrid}>
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.label, { color: colors.textSecondary }]}>Date de passage</Text>
-              <View style={[inputContainerStyle, styles.iconInputContainer]}>
-                <Calendar size={18} color={colors.textMuted} style={{ marginRight: 8 }} />
-                <TextInput
-                  style={[styles.input, { color: colors.textPrimary, flex: 1 }]}
-                  value={visitedAt}
-                  onChangeText={setVisitedAt}
-                  placeholder="JJ/MM/AAAA"
-                  placeholderTextColor={colors.textMuted}
-                  keyboardType="numbers-and-punctuation"
-                  selectionColor={colors.primary}
-                />
-              </View>
+                    <View
+                      pointerEvents="none"
+                      style={[
+                        StyleSheet.absoluteFillObject,
+                        styles.optionSurface,
+                        Shadows.hard,
+                        { backgroundColor: selected ? `${colors.accent}18` : colors.surface, borderColor: selected ? colors.accent : colors.textPrimary },
+                      ]}
+                    />
+                    <Text style={[styles.priceText, { color: selected ? colors.accent : colors.textSecondary }]}>{band.label}</Text>
+                  </Pressable>
+                );
+              })}
             </View>
 
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.label, { color: colors.textSecondary }]}>À refaire</Text>
-              <TouchableOpacity
-                activeOpacity={0.85}
-                style={[
-                  styles.returnBtn,
-                  { backgroundColor: wouldReturn ? colors.success + '18' : colors.surface, borderColor: wouldReturn ? colors.success + '55' : colors.border },
-                  Shadows.sm,
-                ]}
-                onPress={() => setWouldReturn((prev) => !prev)}
-              >
-                <Heart size={18} color={wouldReturn ? colors.success : colors.textMuted} fill={wouldReturn ? colors.success : 'transparent'} />
-                <Text style={[styles.returnText, { color: wouldReturn ? colors.success : colors.textSecondary }]}>
-                  {wouldReturn ? 'Oui' : 'Non'}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
+            <FieldLabel label="Photos" />
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.photoRow}>
+              {images.map((uri) => (
+                <View key={uri}>
+                  <Image source={{ uri }} style={styles.photo} />
+                  <Pressable onPress={() => setImages((current) => current.filter((item) => item !== uri))} accessibilityLabel="Supprimer la photo" style={[styles.removePhoto, { backgroundColor: colors.surface }]}>
+                    <X size={16} color={colors.textPrimary} />
+                  </Pressable>
+                </View>
+              ))}
+              {images.length < 5 ? (
+                <Pressable onPress={addPhotos} style={({ pressed }) => [styles.addPhoto, { backgroundColor: colors.surface, borderColor: colors.textPrimary, opacity: pressed ? 0.6 : 1 }]}>
+                  <Camera size={23} color={colors.accent} />
+                  <Text style={[styles.addPhotoText, { color: colors.textSecondary }]}>Ajouter</Text>
+                </Pressable>
+              ) : null}
+            </ScrollView>
+            <Text style={[styles.helper, { color: colors.textMuted }]}>Sans photo, RestoHub crée une illustration avec le type et les initiales.</Text>
 
-          <Text style={[styles.label, { color: colors.textSecondary }]}>Plat à retenir</Text>
-          <View style={[inputContainerStyle, styles.iconInputContainer]}>
-            <Star size={18} color={colors.textMuted} style={{ marginRight: 8 }} />
-            <TextInput
-              style={[styles.input, { color: colors.textPrimary, flex: 1 }]}
-              value={signatureDish}
-              onChangeText={setSignatureDish}
-              placeholder="Ex: ramen spicy, tiramisu maison..."
-              placeholderTextColor={colors.textMuted}
-              selectionColor={colors.primary}
-            />
-          </View>
+            <FieldLabel label="Description" />
+            <TextInput value={description} onChangeText={setDescription} onSubmitEditing={Keyboard.dismiss} blurOnSubmit placeholder="Ambiance, service, ce qui vaut le détour…" placeholderTextColor={colors.textMuted} selectionColor={colors.accent} multiline style={[styles.input, styles.multiline, { backgroundColor: colors.surface, borderColor: colors.textPrimary, color: colors.textPrimary }]} />
 
-          <Text style={[styles.label, { color: colors.textSecondary }]}>Tags</Text>
-          <View style={[inputContainerStyle, styles.iconInputContainer]}>
-            <Tag size={18} color={colors.textMuted} style={{ marginRight: 8 }} />
-            <TextInput
-              style={[styles.input, { color: colors.textPrimary, flex: 1 }]}
-              value={tagsText}
-              onChangeText={setTagsText}
-              placeholder="terrasse, date, solo..."
-              placeholderTextColor={colors.textMuted}
-              selectionColor={colors.primary}
-            />
-          </View>
-
-          {/* Description */}
-          <Text style={[styles.label, { color: colors.textSecondary }]}>Description & Avis</Text>
-          <View style={[inputContainerStyle, styles.multilineContainer]}>
-            <TextInput
-              style={[styles.input, styles.multiline, { color: colors.textPrimary }]}
-              value={description}
-              onChangeText={setDescription}
-              placeholder="Qu'avez-vous pensé de cet endroit ?..."
-              placeholderTextColor={colors.textMuted}
-              multiline
-              numberOfLines={4}
-              selectionColor={colors.primary}
-              textAlignVertical="top"
-            />
-          </View>
-
-          {/* Images Section */}
-          <View style={styles.sectionHeader}>
-            <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Photos ({images.length}/5)</Text>
-            {images.length < 5 && (
-              <TouchableOpacity onPress={pickImages}>
-                <Text style={[styles.link, { color: colors.primary }]}>Ajouter</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.imageRow}>
-            {images.map((uri) => (
-              <View key={uri} style={[styles.imageThumb, Shadows.sm]}>
-                <Image source={{ uri }} style={styles.thumbImg} />
-                <TouchableOpacity
-                  style={styles.removeImg}
-                  onPress={() => removeImage(uri)}
-                >
-                  <X size={14} color="#fff" strokeWidth={3} />
-                </TouchableOpacity>
-              </View>
-            ))}
-            {images.length === 0 && (
-              <TouchableOpacity
-                style={[styles.addImagePlaceholder, { backgroundColor: colors.surface }, Shadows.sm]}
-                onPress={pickImages}
-              >
-                <Camera size={32} color={colors.textMuted} style={{ marginBottom: 8 }} />
-                <Text style={[styles.addImageText, { color: colors.textMuted }]}>Ajouter des photos</Text>
-              </TouchableOpacity>
-            )}
-          </ScrollView>
-
-          {/* Bottom Save Button */}
-          <TouchableOpacity
-            style={[styles.mainSaveBtn, { backgroundColor: colors.primary }, Shadows.glow(colors.primary), saving && { opacity: 0.7 }]}
-            onPress={handleSave}
-            disabled={saving || !name.trim()}
+            <FieldLabel label="Tags" />
+            <TextInput value={tagsText} onChangeText={setTagsText} onSubmitEditing={Keyboard.dismiss} returnKeyType="done" blurOnSubmit placeholder="terrasse, date, veggie" placeholderTextColor={colors.textMuted} selectionColor={colors.accent} autoCapitalize="none" style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.textPrimary, color: colors.textPrimary }]} />
+            <Text style={[styles.helper, { color: colors.textMuted }]}>Séparez les tags par une virgule.</Text>
+          </>
+        )}
+        <View style={[styles.bottomBar, { backgroundColor: colors.surface, borderColor: colors.textPrimary }]}>
+          <Pressable
+            onPress={step === 1 ? continueToDetails : submit}
+            disabled={(step === 1 && !name.trim()) || saving || locationLoading}
+            style={({ pressed }) => [
+              styles.primaryButton,
+              { backgroundColor: colors.accent, opacity: (step === 1 && !name.trim()) || saving || locationLoading ? 0.42 : pressed ? 0.72 : 1 },
+            ]}
           >
-            {saving ? <ActivityIndicator color="#FFF" /> : (
-              <Text style={[styles.mainSaveBtnText, { color: '#FFF' }]}>
-                {editing ? 'Mettre à jour' : 'Ajouter le restaurant'}
-              </Text>
-            )}
-          </TouchableOpacity>
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </View>
+            {saving || locationLoading ? <ActivityIndicator size="small" color={colors.textOnAccent} /> : step === 1 ? <ArrowRight size={19} color={colors.textOnAccent} /> : <Check size={19} color={colors.textOnAccent} />}
+            <Text style={[styles.primaryButtonText, { color: colors.textOnAccent }]}>{step === 1 ? 'Continuer' : editing ? 'Enregistrer' : 'Ajouter le resto'}</Text>
+          </Pressable>
+        </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
+
+  function FieldLabel({ label, required = false }: { label: string; required?: boolean }) {
+    return (
+      <Text style={[styles.label, { color: colors.textPrimary }]}>
+        {label}{required ? <Text style={{ color: colors.accent }}> *</Text> : null}
+      </Text>
+    );
+  }
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: Spacing.xl,
-    paddingBottom: Spacing.lg,
-    zIndex: 10,
-  },
-  backButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerTitle: {
-    fontSize: FontSize.lg,
-    fontFamily: FontFamily.bold,
-    flex: 1,
-    marginHorizontal: Spacing.md,
-    textAlign: 'center',
-  },
-  saveBtnTop: {
-    width: 44,
-    height: 44,
-    borderRadius: BorderRadius.xl,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  scroll: {
-    flex: 1,
-  },
-  scrollContent: {
-    padding: Spacing.xl,
-    paddingTop: Spacing.xxl,
-  },
-  sectionTitle: {
-    fontSize: FontSize.xl,
-    fontFamily: FontFamily.bold,
-    marginBottom: Spacing.lg,
-    letterSpacing: -0.5,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: Spacing.xxl,
-    marginBottom: Spacing.lg,
-  },
-  link: {
-    fontSize: FontSize.sm,
-    fontFamily: FontFamily.bold,
-  },
-  label: {
-    fontSize: FontSize.xs,
-    fontFamily: FontFamily.bold,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-    marginBottom: Spacing.sm,
-    marginTop: Spacing.md,
-  },
-  inputContainer: {
-    borderRadius: BorderRadius.xl,
-    paddingHorizontal: Spacing.lg,
-    height: 56,
-    justifyContent: 'center',
-    borderWidth: 1,
-  },
-  iconInputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  input: {
-    fontSize: FontSize.md,
-    fontFamily: FontFamily.medium,
-    height: '100%',
-  },
-  multilineContainer: {
-    height: 120,
-    paddingVertical: Spacing.md,
-  },
-  multiline: {
-    textAlignVertical: 'top',
-  },
-  catRow: {
-    marginTop: Spacing.sm,
-  },
-  catChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.md,
-    borderRadius: BorderRadius.full,
-    marginRight: Spacing.md,
-  },
-  catLabel: {
-    fontSize: FontSize.sm,
-    fontFamily: FontFamily.medium,
-  },
-  addressRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.md,
-  },
-  roundBtn: {
-    width: 56,
-    height: 56,
-    borderRadius: BorderRadius.xl,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  locationBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: Spacing.md,
-    borderRadius: BorderRadius.lg,
-    marginTop: Spacing.md,
-  },
-  locationText: {
-    fontSize: FontSize.sm,
-    fontFamily: FontFamily.medium,
-    flex: 1,
-  },
-  locationAction: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: Spacing.lg,
-    borderRadius: BorderRadius.xl,
-    marginTop: Spacing.sm,
-  },
-  locationActionText: {
-    fontSize: FontSize.sm,
-    fontFamily: FontFamily.bold,
-  },
-  priceGrid: {
-    flexDirection: 'row',
-    gap: Spacing.md,
-  },
-  priceLevelRow: {
-    flexDirection: 'row',
-    gap: Spacing.md,
-    marginTop: Spacing.xs,
-  },
-  priceLevelBtn: {
-    flex: 1,
-    height: 52,
-    borderRadius: BorderRadius.xl,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  priceLevelText: {
-    fontSize: FontSize.md,
-    fontFamily: FontFamily.bold,
-  },
-  ratingRow: {
-    flexDirection: 'row',
-    gap: Spacing.sm,
-    marginBottom: Spacing.sm,
-  },
-  ratingBtn: {
-    flex: 1,
-    height: 52,
-    borderRadius: BorderRadius.xl,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  visitGrid: {
-    flexDirection: 'row',
-    gap: Spacing.md,
-  },
-  returnBtn: {
-    height: 56,
-    borderRadius: BorderRadius.xl,
-    borderWidth: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: Spacing.sm,
-  },
-  returnText: {
-    fontSize: FontSize.md,
-    fontFamily: FontFamily.bold,
-  },
-  imageRow: {
-    flexDirection: 'row',
-  },
-  imageThumb: {
-    width: 120,
-    height: 120,
-    borderRadius: BorderRadius.xxl,
-    marginRight: Spacing.lg,
-    overflow: 'hidden',
-  },
-  thumbImg: {
-    width: '100%',
-    height: '100%',
-  },
-  removeImg: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  addImagePlaceholder: {
-    width: 160,
-    height: 120,
-    borderRadius: BorderRadius.xxl,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: 'rgba(150,150,150,0.1)',
-    borderStyle: 'dashed',
-  },
-  addImageText: {
-    fontSize: FontSize.xs,
-    fontFamily: FontFamily.bold,
-  },
-  mainSaveBtn: {
-    height: 64,
-    borderRadius: BorderRadius.xxl,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: Spacing.xxxl * 1.5,
-  },
-  mainSaveBtnText: {
-    fontSize: FontSize.lg,
-    fontFamily: FontFamily.bold,
-  },
+  screen: { flex: 1 },
+  topBar: { minHeight: 54, paddingHorizontal: Spacing.sm, paddingBottom: 6, flexDirection: 'row', alignItems: 'flex-end' },
+  topAction: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  topCopy: { flex: 1, alignItems: 'center', paddingBottom: 7 },
+  topTitle: { fontFamily: FontFamily.semiBold, fontSize: FontSize.md },
+  stepText: { marginTop: 2, fontFamily: FontFamily.medium, fontSize: FontSize.xs },
+  progressTrack: { height: 3 },
+  progressValue: { height: 3 },
+  content: { paddingHorizontal: Spacing.lg, paddingTop: Spacing.xxl },
+  heading: { marginBottom: Spacing.lg, fontFamily: FontFamily.semiBold, fontSize: FontSize.xl, lineHeight: 29, letterSpacing: -0.4 },
+  label: { marginTop: Spacing.xl, marginBottom: Spacing.sm, fontFamily: FontFamily.medium, fontSize: FontSize.sm },
+  input: { minHeight: 50, paddingHorizontal: Spacing.md, borderWidth: 1.5, borderRadius: 8, fontFamily: FontFamily.regular, fontSize: FontSize.md },
+  multiline: { minHeight: 112, paddingTop: Spacing.md, textAlignVertical: 'top' },
+  error: { marginTop: 6, fontFamily: FontFamily.medium, fontSize: FontSize.xs },
+  helper: { fontFamily: FontFamily.regular, fontSize: FontSize.xs, lineHeight: 18 },
+  categoryGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
+  categoryOption: { position: 'relative', width: '31%', minHeight: 64, padding: Spacing.sm, alignItems: 'center', justifyContent: 'center', gap: 6 },
+  optionSurface: { borderWidth: 1.5, borderRadius: 8 },
+  categoryText: { maxWidth: '100%', fontFamily: FontFamily.medium, fontSize: 11 },
+  addressField: { minHeight: 50, paddingHorizontal: Spacing.md, flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, borderWidth: 1.5, borderRadius: 8 },
+  addressInput: { flex: 1, minHeight: 48, fontFamily: FontFamily.regular, fontSize: FontSize.md },
+  locationStatus: { minHeight: 48, marginTop: Spacing.sm, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: Spacing.sm },
+  locationButton: { minHeight: 44, paddingHorizontal: Spacing.md, flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1.5, borderRadius: 8 },
+  locationButtonText: { fontFamily: FontFamily.semiBold, fontSize: FontSize.xs },
+  priceRow: { flexDirection: 'row', gap: Spacing.sm },
+  priceOption: { position: 'relative', flex: 1, minHeight: 46, alignItems: 'center', justifyContent: 'center' },
+  priceText: { fontFamily: FontFamily.semiBold, fontSize: FontSize.sm },
+  photoRow: { gap: Spacing.sm, paddingRight: Spacing.lg },
+  photo: { width: 88, height: 88, borderRadius: BorderRadius.md },
+  removePhoto: { position: 'absolute', top: 4, right: 4, width: 30, height: 30, alignItems: 'center', justifyContent: 'center', borderRadius: 15 },
+  addPhoto: { width: 88, height: 88, alignItems: 'center', justifyContent: 'center', gap: 6, borderWidth: 1, borderStyle: 'dashed', borderRadius: BorderRadius.md },
+  addPhotoText: { fontFamily: FontFamily.medium, fontSize: FontSize.xs },
+  bottomBar: { marginTop: Spacing.xxl, marginBottom: Spacing.lg, padding: Spacing.sm, borderWidth: 1.5, borderRadius: 12 },
+  primaryButton: { minHeight: 52, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Spacing.sm, borderRadius: BorderRadius.md },
+  primaryButtonText: { fontFamily: FontFamily.semiBold, fontSize: FontSize.md },
 });

@@ -1,91 +1,110 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  View,
-  Text,
   FlatList,
-  TextInput,
-  TouchableOpacity,
-  StyleSheet,
-  StatusBar,
-  ScrollView,
-  Alert,
+  Keyboard,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  useWindowDimensions,
+  View,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Search, Utensils, Plus, Sun, Moon, Sparkles, FilterX, Camera, Heart, Star, Calendar, SlidersHorizontal, X } from 'lucide-react-native';
+import { StatusBar } from 'expo-status-bar';
+import {
+  Check,
+  Filter,
+  Search,
+  Shuffle,
+  SlidersHorizontal,
+  Utensils,
+  X,
+} from '../components/FlaticonIcon';
 
 import { Restaurant, RestaurantCategory, RestaurantsStackParamList } from '../types';
-import { getRestaurants, addRestaurantsChangeListener } from '../storage/storage';
+import { addCollectionsChangeListener, addRestaurantsChangeListener, getVisibleRestaurants } from '../storage/storage';
 import RestaurantCard from '../components/RestaurantCard';
 import EmptyState from '../components/EmptyState';
+import ScreenHeader from '../components/ScreenHeader';
 import { useTheme } from '../theme/ThemeProvider';
-import { Spacing, BorderRadius, FontSize, FontFamily, Shadows } from '../constants/theme';
+import { BorderRadius, FontFamily, FontSize, Shadows, Spacing } from '../constants/theme';
 import { CATEGORY_LIST } from '../constants/categories';
-import { BudgetFilter, filterAndSortRestaurants, pickRandomRestaurant, RestaurantSortOption } from '../utils/restaurantDiscovery';
+import {
+  BudgetFilter,
+  filterAndSortRestaurants,
+  pickRandomRestaurant,
+  RestaurantSortOption,
+} from '../utils/restaurantDiscovery';
 
 type Props = NativeStackScreenProps<RestaurantsStackParamList, 'Home'>;
+type SourceFilter = 'all' | 'personal' | 'friends';
 
 export default function RestaurantListScreen({ navigation }: Props) {
-  const { colors, isDark, setTheme } = useTheme();
+  const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
+  const { width, fontScale } = useWindowDimensions();
+  const compactControls = width < 360 || fontScale > 1.3;
   const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
-  const [search, setSearch] = useState('');
-  const [category, setCategory] = useState<RestaurantCategory | null>(null);
+  const [query, setQuery] = useState('');
+  const [source, setSource] = useState<SourceFilter>('all');
+  const [categories, setCategories] = useState<RestaurantCategory[]>([]);
   const [budget, setBudget] = useState<BudgetFilter>('all');
   const [photosOnly, setPhotosOnly] = useState(false);
   const [revisitOnly, setRevisitOnly] = useState(false);
   const [minRating, setMinRating] = useState<number | null>(null);
   const [sort, setSort] = useState<RestaurantSortOption>('recent');
-  const [filterModalVisible, setFilterModalVisible] = useState(false);
-  const insets = useSafeAreaInsets();
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
-  const loadRestaurants = useCallback(() => {
-    getRestaurants().then(setRestaurants);
+  const load = useCallback(() => {
+    getVisibleRestaurants().then(setRestaurants);
   }, []);
 
-  useFocusEffect(
-    useCallback(() => {
-      loadRestaurants();
-    }, [loadRestaurants])
-  );
-
+  useFocusEffect(useCallback(() => { load(); }, [load]));
   useEffect(() => {
-    const unsubscribe = addRestaurantsChangeListener(() => {
-      loadRestaurants();
-    });
-    return () => { unsubscribe(); };
-  }, [loadRestaurants]);
+    const offRestaurants = addRestaurantsChangeListener(load);
+    const offCollections = addCollectionsChangeListener(load);
+    return () => { offRestaurants(); offCollections(); };
+  }, [load]);
 
-  const filtered = filterAndSortRestaurants(restaurants, {
-    query: search,
-    category,
+  const sourceRestaurants = useMemo(() => restaurants.filter((restaurant) => {
+    if (source === 'personal') return restaurant.origin?.kind !== 'imported';
+    if (source === 'friends') return restaurant.origin?.kind === 'imported' || Boolean(restaurant.sources?.length);
+    return true;
+  }), [restaurants, source]);
+
+  const filtered = useMemo(() => filterAndSortRestaurants(sourceRestaurants, {
+    query,
+    categories,
     budget,
     photosOnly,
     revisitOnly,
     minRating,
     sort,
-  });
+  }), [sourceRestaurants, query, categories, budget, photosOnly, revisitOnly, minRating, sort]);
 
-  const ratedRestaurants = restaurants.filter((restaurant) => restaurant.rating);
-  const averageRating = ratedRestaurants.length
-    ? ratedRestaurants.reduce((sum, restaurant) => sum + (restaurant.rating || 0), 0) / ratedRestaurants.length
+  const rated = restaurants.filter((restaurant) => restaurant.rating);
+  const average = rated.length
+    ? rated.reduce((total, restaurant) => total + (restaurant.rating || 0), 0) / rated.length
     : 0;
-  const revisitCount = restaurants.filter((restaurant) => restaurant.wouldReturn).length;
-  const visitedCount = restaurants.filter((restaurant) => restaurant.visitedAt).length;
-  const hasActiveFilters = !!search.trim() || category !== null || budget !== 'all' || photosOnly || revisitOnly || minRating !== null || sort !== 'recent';
-  const filterCount = [
-    category !== null,
-    budget !== 'all',
-    photosOnly,
-    revisitOnly,
-    minRating !== null,
-    sort !== 'recent',
-  ].filter(Boolean).length;
+  const importedCount = restaurants.filter((restaurant) => restaurant.origin?.kind === 'imported' || Boolean(restaurant.sources?.length)).length;
+  const importedShare = restaurants.length ? Math.round((importedCount / restaurants.length) * 100) : 0;
+  const advancedCount = [categories.length > 0, budget !== 'all', photosOnly, revisitOnly, minRating, sort !== 'recent'].filter(Boolean).length;
+  const selectedCategoryLabel = categories.length === 0
+    ? 'Toutes'
+    : categories.length <= 2
+      ? categories.map((value) => CATEGORY_LIST.find((item) => item.value === value)?.label || value).join(' · ')
+      : `${categories.length} catégories`;
+  const selectedBudgetLabel = ({ all: 'Tous', low: '1–10 €', mid: '11–20 €', high: '21–30 €', unknown: 'Non renseigné' } as const)[budget];
+  const selectedSortLabel = ({ recent: 'Ajout récent', rating: 'Note', visited: 'Dernier passage', name: 'Nom', price_low: 'Prix croissant', price_high: 'Prix décroissant' } as const)[sort];
 
-  const clearFilters = () => {
-    setSearch('');
-    setCategory(null);
+  const resetAdvanced = () => {
+    setCategories([]);
     setBudget('all');
     setPhotosOnly(false);
     setRevisitOnly(false);
@@ -93,621 +112,286 @@ export default function RestaurantListScreen({ navigation }: Props) {
     setSort('recent');
   };
 
-  const chooseForMe = () => {
-    const chosen = pickRandomRestaurant(filtered);
-    if (!chosen) {
-      Alert.alert('Aucun résultat', 'Modifiez les filtres pour obtenir des suggestions.');
-      return;
-    }
-    navigation.navigate('RestaurantDetail', { restaurantId: chosen.id });
+  const openRandom = () => {
+    const restaurant = pickRandomRestaurant(filtered);
+    if (restaurant) navigation.navigate('RestaurantDetail', { restaurantId: restaurant.id });
   };
 
-  const sortLabel = sort === 'recent'
-    ? 'Récents'
-    : sort === 'name'
-      ? 'A-Z'
-      : sort === 'price_low'
-        ? 'Prix +'
-        : sort === 'price_high'
-          ? 'Prix -'
-          : sort === 'rating'
-            ? 'Note'
-            : 'Passage';
+  const toggleCategory = (value: RestaurantCategory) => {
+    setCategories((current) => current.includes(value)
+      ? current.filter((category) => category !== value)
+      : [...current, value]);
+  };
+
+  const header = (
+    <View style={[styles.header, { paddingTop: insets.top + Spacing.lg }]}>
+      <ScreenHeader
+        title="Restos"
+        subtitle="Toutes les adresses au même endroit"
+        onAdd={() => navigation.navigate('AddRestaurant')}
+        addAccessibilityLabel="Ajouter une adresse"
+        showAdd={restaurants.length > 0}
+      />
+
+      <View style={[styles.stats, Shadows.hard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <View style={styles.stat}>
+          <Text style={[styles.statValue, { color: colors.textPrimary }]}>{restaurants.length}</Text>
+          <Text style={[styles.statLabel, { color: colors.textMuted }]}>adresses</Text>
+        </View>
+        <View style={styles.stat}>
+          <Text style={[styles.statValue, { color: colors.textPrimary }]}>{average ? average.toFixed(1) : '—'}</Text>
+          <Text style={[styles.statLabel, { color: colors.textMuted }]}>moyenne</Text>
+        </View>
+        <View style={styles.stat}>
+          <Text style={[styles.statValue, { color: colors.friendText }]}>{importedShare}%</Text>
+          <Text style={[styles.statLabel, { color: colors.textMuted }]}>des amis</Text>
+        </View>
+      </View>
+
+      <View style={[styles.search, Shadows.hard, { backgroundColor: colors.surface, borderColor: colors.textPrimary }]}>
+        <Search size={19} color={colors.textMuted} />
+        <TextInput
+          value={query}
+          onChangeText={setQuery}
+          onSubmitEditing={Keyboard.dismiss}
+          returnKeyType="search"
+          blurOnSubmit
+          placeholder="Nom, quartier, plat…"
+          placeholderTextColor={colors.textMuted}
+          selectionColor={colors.accent}
+          accessibilityLabel="Rechercher une adresse"
+          style={[styles.searchInput, { color: colors.textPrimary }]}
+        />
+        {query ? (
+          <Pressable onPress={() => setQuery('')} accessibilityLabel="Effacer la recherche" hitSlop={10}>
+            <X size={18} color={colors.textMuted} />
+          </Pressable>
+        ) : null}
+      </View>
+
+      <View
+        style={[
+          styles.sourceTabs,
+          compactControls && styles.sourceTabsCompact,
+          { backgroundColor: colors.surfaceMuted, borderColor: colors.textPrimary, borderWidth: 1.5 },
+        ]}
+      >
+        {([
+          ['all', 'Tout'],
+          ['personal', 'Mes adresses'],
+          ['friends', 'Listes d’amis'],
+        ] as const).map(([value, label]) => {
+          const selected = source === value;
+          return (
+            <Pressable
+              key={value}
+              onPress={() => setSource(value)}
+              accessibilityRole="tab"
+              accessibilityState={{ selected }}
+              style={({ pressed }) => [
+                styles.sourceTab,
+                compactControls && styles.sourceTabCompact,
+                selected && { backgroundColor: colors.surface, borderColor: colors.textPrimary, borderWidth: 1.5 },
+                { opacity: pressed ? 0.65 : 1 },
+              ]}
+            >
+              <Text style={[styles.sourceTabText, { color: selected ? colors.textPrimary : colors.textMuted }]}>{label}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
+
+      <View style={[styles.resultRow, compactControls && styles.resultRowCompact]}>
+        <Text style={[styles.resultText, { color: colors.textMuted }]}>
+          {filtered.length} résultat{filtered.length !== 1 ? 's' : ''}
+        </Text>
+        <View style={[styles.inlineActions, compactControls && styles.inlineActionsCompact]}>
+          <Pressable
+            onPress={openRandom}
+            disabled={!filtered.length}
+            style={({ pressed }) => [styles.textAction, { opacity: !filtered.length ? 0.35 : pressed ? 0.55 : 1 }]}
+          >
+            <Shuffle size={16} color={colors.textSecondary} />
+            <Text style={[styles.textActionLabel, { color: colors.textSecondary }]}>Choisir</Text>
+          </Pressable>
+          <Pressable onPress={() => setFiltersOpen(true)} style={({ pressed }) => [styles.textAction, { opacity: pressed ? 0.55 : 1 }]}>
+            {advancedCount ? <Filter size={16} color={colors.accent} /> : <SlidersHorizontal size={16} color={colors.textSecondary} />}
+            <Text style={[styles.textActionLabel, { color: advancedCount ? colors.accent : colors.textSecondary }]}>Filtres{advancedCount ? ` · ${advancedCount}` : ''}</Text>
+          </Pressable>
+        </View>
+      </View>
+    </View>
+  );
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.background} translucent={false} />
-
+    <KeyboardAvoidingView style={[styles.screen, { backgroundColor: colors.background }]} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <FlatList
         data={filtered}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => (
-          <RestaurantCard
-            restaurant={item}
-            onPress={() => navigation.navigate('RestaurantDetail', { restaurantId: item.id })}
-          />
+          <RestaurantCard restaurant={item} onPress={() => navigation.navigate('RestaurantDetail', { restaurantId: item.id })} />
         )}
-        ListHeaderComponent={
-          <View style={[styles.mainHeaderContent, { paddingTop: insets.top + Spacing.lg }]}> 
-            <View style={styles.titleRow}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
-                <Text style={[styles.mainTitle, { color: colors.textPrimary }]}>Mes adresses</Text>
-                <View style={[styles.countBadge, { backgroundColor: colors.primary + '20' }]}>
-                  <Text style={[styles.countText, { color: colors.primary }]}>{restaurants.length}</Text>
-                </View>
-              </View>
-
-              <TouchableOpacity
-                onPress={() => setTheme(isDark ? 'light' : 'dark')}
-                style={[styles.themeToggle, { backgroundColor: colors.surfaceLight }]}
-              >
-                {isDark ? (
-                  <Sun size={20} color={colors.primary} />
-                ) : (
-                  <Moon size={20} color={colors.primary} />
-                )}
-              </TouchableOpacity>
-            </View>
-            <Text style={[styles.subtitle, { color: colors.textSecondary }]}>Les meilleurs spots en ville</Text>
-
-            <View style={[styles.insightPanel, { backgroundColor: colors.surface, borderColor: colors.border }, Shadows.sm]}>
-              <View style={styles.insightItem}>
-                <View style={[styles.insightIcon, { backgroundColor: colors.warning + '18' }]}>
-                  <Star size={17} color={colors.warning} fill={averageRating > 0 ? colors.warning : 'transparent'} />
-                </View>
-                <Text style={[styles.insightValue, { color: colors.textPrimary }]}>
-                  {averageRating ? averageRating.toFixed(1) : '--'}
-                </Text>
-                <Text style={[styles.insightLabel, { color: colors.textMuted }]}>note moy.</Text>
-              </View>
-              <View style={[styles.insightDivider, { backgroundColor: colors.border }]} />
-              <View style={styles.insightItem}>
-                <View style={[styles.insightIcon, { backgroundColor: colors.success + '18' }]}>
-                  <Heart size={17} color={colors.success} fill={revisitCount > 0 ? colors.success : 'transparent'} />
-                </View>
-                <Text style={[styles.insightValue, { color: colors.textPrimary }]}>{revisitCount}</Text>
-                <Text style={[styles.insightLabel, { color: colors.textMuted }]}>à refaire</Text>
-              </View>
-              <View style={[styles.insightDivider, { backgroundColor: colors.border }]} />
-              <View style={styles.insightItem}>
-                <View style={[styles.insightIcon, { backgroundColor: colors.primary + '18' }]}>
-                  <Calendar size={17} color={colors.primary} />
-                </View>
-                <Text style={[styles.insightValue, { color: colors.textPrimary }]}>{visitedCount}</Text>
-                <Text style={[styles.insightLabel, { color: colors.textMuted }]}>passages</Text>
-              </View>
-            </View>
-
-            <View style={[styles.searchContainer, Shadows.sm]}>
-              <View style={[styles.searchBar, { backgroundColor: colors.surface }]}>
-                <Search size={20} color={colors.textMuted} style={styles.searchIcon} strokeWidth={2.5} />
-                <TextInput
-                  style={[styles.searchInput, { color: colors.textPrimary }]}
-                  value={search}
-                  onChangeText={setSearch}
-                  placeholder="Chercher un lieu, un plat..."
-                  placeholderTextColor={colors.textMuted}
-                  selectionColor={colors.primary}
-                />
-              </View>
-            </View>
-
-            <View style={styles.headerActionsRow}>
-              <TouchableOpacity
-                style={[styles.quickAction, { backgroundColor: colors.primary }, Shadows.sm]}
-                onPress={chooseForMe}
-                activeOpacity={0.9}
-              >
-                <Sparkles size={16} color={colors.textOnPrimary} />
-                <Text style={[styles.quickActionText, { color: colors.textOnPrimary }]}>Choisis pour moi</Text>
-              </TouchableOpacity>
-
-              {hasActiveFilters ? (
-                <TouchableOpacity
-                  style={[styles.quickActionLight, { backgroundColor: colors.surfaceLight }]}
-                  onPress={clearFilters}
-                  activeOpacity={0.9}
-                >
-                  <FilterX size={16} color={colors.textSecondary} />
-                  <Text style={[styles.quickActionLightText, { color: colors.textSecondary }]}>Réinitialiser</Text>
-                </TouchableOpacity>
-              ) : null}
-
-              <TouchableOpacity
-                style={[styles.quickActionLight, { backgroundColor: colors.surfaceLight }]}
-                onPress={() => setFilterModalVisible(true)}
-                activeOpacity={0.9}
-              >
-                <SlidersHorizontal size={16} color={colors.textSecondary} />
-                <Text style={[styles.quickActionLightText, { color: colors.textSecondary }]}>
-                  Filtres{filterCount ? ` (${filterCount})` : ''}
-                </Text>
-              </TouchableOpacity>
-            </View>
-
-            <Text style={[styles.resultMeta, { color: colors.textMuted }]}>
-              {filtered.length} résultat{filtered.length > 1 ? 's' : ''} · Tri: {sortLabel}
-            </Text>
-          </View>
-        }
-        contentContainerStyle={[
-          filtered.length === 0 ? styles.emptyContainer : styles.list,
-          { paddingBottom: insets.bottom + 120 }
-        ]}
-        ListEmptyComponent={
+        ListHeaderComponent={header}
+        ListEmptyComponent={(
           <EmptyState
             icon={Utensils}
-            title={restaurants.length === 0 ? 'Aucun restaurant' : 'Aucun résultat'}
-            subtitle={restaurants.length === 0
-              ? 'Explorez et ajoutez votre premier restaurant favori pour commencer.'
-              : 'Aucun restaurant ne correspond à vos filtres actuels.'}
+            title={restaurants.length ? 'Aucune adresse trouvée' : 'Votre carnet est vide'}
+            subtitle={restaurants.length ? 'Essayez une autre recherche ou réinitialisez les filtres.' : 'Ajoutez une adresse ou importez la liste d’un ami.'}
+            actionLabel={restaurants.length ? 'Réinitialiser' : 'Ajouter une adresse'}
+            onAction={restaurants.length ? () => { setQuery(''); setSource('all'); resetAdvanced(); } : () => navigation.navigate('AddRestaurant')}
           />
-        }
+        )}
+        contentContainerStyle={{ paddingBottom: insets.bottom + 96 }}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+        automaticallyAdjustKeyboardInsets
         showsVerticalScrollIndicator={false}
       />
-      <TouchableOpacity
-        style={[
-          styles.fab,
-          {
-            bottom: insets.bottom,
-            backgroundColor: colors.primary
-          },
-          Shadows.glow(colors.primary)
-        ]}
-        onPress={() => navigation.navigate('AddRestaurant', {})}
-        activeOpacity={0.9}
-      >
-        <Plus size={32} color={colors.textOnPrimary} strokeWidth={2.5} />
-      </TouchableOpacity>
 
-      <Modal
-        visible={filterModalVisible}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setFilterModalVisible(false)}
-      >
-        <View style={styles.filterBackdrop}>
-          <TouchableOpacity
-            activeOpacity={1}
-            style={StyleSheet.absoluteFillObject}
-            onPress={() => setFilterModalVisible(false)}
-          />
-          <View
-            style={[
-              styles.filterSheet,
-              {
-                backgroundColor: colors.surface,
-                borderColor: colors.border,
-                paddingBottom: insets.bottom + Spacing.xl,
-              },
-            ]}
-          >
-            <View style={styles.filterHandle} />
-            <View style={styles.filterHeader}>
-              <View>
-                <Text style={[styles.filterTitle, { color: colors.textPrimary }]}>Filtres</Text>
-                <Text style={[styles.filterSubtitle, { color: colors.textMuted }]}>
-                  {filtered.length} adresse{filtered.length > 1 ? 's' : ''} visible{filtered.length > 1 ? 's' : ''}
-                </Text>
+      <Modal visible={filtersOpen} transparent presentationStyle="overFullScreen" animationType="slide" statusBarTranslucent onRequestClose={() => setFiltersOpen(false)}>
+        <StatusBar style="light" />
+        <View style={[styles.modalRoot, { backgroundColor: colors.overlay }]}>
+          <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setFiltersOpen(false)} />
+          <View style={[styles.sheet, Shadows.sheet, { backgroundColor: colors.surface, borderColor: colors.textPrimary }]}>
+            <View style={[styles.sheetHandle, { backgroundColor: colors.border }]} />
+            <View style={styles.sheetHeader}>
+              <View style={styles.sheetHeaderCopy}>
+                <Text style={[styles.sheetTitle, { color: colors.textPrimary }]}>Affiner les adresses</Text>
+                <Text style={[styles.sheetSubtitle, { color: colors.textMuted }]}>Les filtres s’appliquent immédiatement.</Text>
               </View>
-              <TouchableOpacity
-                style={[styles.filterCloseBtn, { backgroundColor: colors.surfaceLight }]}
-                onPress={() => setFilterModalVisible(false)}
-              >
-                <X size={20} color={colors.textPrimary} />
-              </TouchableOpacity>
+              <Pressable onPress={() => setFiltersOpen(false)} accessibilityLabel="Fermer" style={styles.closeButton}>
+                <X size={22} color={colors.textPrimary} />
+              </Pressable>
             </View>
+            <ScrollView style={[styles.filterScroll, { backgroundColor: colors.surface }]} showsVerticalScrollIndicator={false} contentContainerStyle={styles.filterContent}>
+              <Text style={[styles.sectionLabel, { color: colors.textPrimary }]}>Catégorie</Text>
+              <Text style={[styles.selectionHint, { color: colors.textMuted }]}>{selectedCategoryLabel}</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalOptions}>
+                <Option label="Toutes" selected={categories.length === 0} onPress={() => setCategories([])} />
+                {CATEGORY_LIST.map((item) => (
+                  <Option key={item.value} label={item.label} selected={categories.includes(item.value)} onPress={() => toggleCategory(item.value)} />
+                ))}
+              </ScrollView>
 
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.filterContent}>
-              <Text style={[styles.filterSectionTitle, { color: colors.textPrimary }]}>Catégorie</Text>
-              <View style={styles.filterChipGrid}>
-                <TouchableOpacity
-                  onPress={() => setCategory(null)}
-                  style={[
-                    styles.modalChip,
-                    { backgroundColor: colors.surfaceLight, borderColor: colors.border },
-                    category === null && { backgroundColor: colors.primary, borderColor: colors.primary },
-                  ]}
-                >
-                  <Text style={[styles.chipText, { color: category === null ? colors.textOnPrimary : colors.textSecondary }]}>
-                    Toutes
-                  </Text>
-                </TouchableOpacity>
-                {CATEGORY_LIST.map((item) => {
-                  const selected = category === item.value;
-                  return (
-                    <TouchableOpacity
-                      key={item.value}
-                      onPress={() => setCategory(selected ? null : item.value)}
-                      style={[
-                        styles.modalChip,
-                        { backgroundColor: colors.surfaceLight, borderColor: colors.border },
-                        selected && { backgroundColor: item.color, borderColor: item.color },
-                      ]}
-                    >
-                      <Text style={[styles.chipText, { color: selected ? '#FFF' : colors.textSecondary }]}>
-                        {item.label}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
+              <Text style={[styles.sectionLabel, { color: colors.textPrimary }]}>Budget</Text>
+              <Text style={[styles.selectionHint, { color: colors.textMuted }]}>{selectedBudgetLabel}</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalOptions}>
+                {([
+                  ['all', 'Tous'], ['low', '1–10 €'], ['mid', '11–20 €'], ['high', '21–30 €'], ['unknown', 'Non renseigné'],
+                ] as const).map(([value, label]) => <Option key={value} label={label} selected={budget === value} onPress={() => setBudget(value)} />)}
+              </ScrollView>
+
+              <Text style={[styles.sectionLabel, { color: colors.textPrimary }]}>Préférences</Text>
+              <View style={[styles.preferenceList, Shadows.hard, { backgroundColor: colors.surface, borderColor: colors.textPrimary }]}>
+                <PreferenceRow label="Avec photos" selected={photosOnly} onPress={() => setPhotosOnly(!photosOnly)} />
+                <PreferenceRow label="À refaire" selected={revisitOnly} onPress={() => setRevisitOnly(!revisitOnly)} />
+                <PreferenceRow label="Notées 4+" selected={minRating === 4} onPress={() => setMinRating(minRating === 4 ? null : 4)} />
               </View>
 
-              <Text style={[styles.filterSectionTitle, { color: colors.textPrimary }]}>Budget</Text>
-              <View style={styles.filterChipGrid}>
-                {[
-                  { key: 'all', label: 'Tous' },
-                  { key: 'low', label: '< 20€' },
-                  { key: 'mid', label: '20-40€' },
-                  { key: 'high', label: '> 40€' },
-                  { key: 'unknown', label: 'Non renseigné' },
-                ].map((item) => {
-                  const selected = budget === item.key;
-                  return (
-                    <TouchableOpacity
-                      key={item.key}
-                      onPress={() => setBudget(item.key as BudgetFilter)}
-                      style={[
-                        styles.modalChip,
-                        { backgroundColor: colors.surfaceLight, borderColor: colors.border },
-                        selected && { backgroundColor: colors.primary, borderColor: colors.primary },
-                      ]}
-                    >
-                      <Text style={[styles.chipText, { color: selected ? colors.textOnPrimary : colors.textSecondary }]}>
-                        {item.label}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-
-              <Text style={[styles.filterSectionTitle, { color: colors.textPrimary }]}>Options</Text>
-              <View style={styles.filterOptionGrid}>
-                <TouchableOpacity
-                  onPress={() => setPhotosOnly((prev) => !prev)}
-                  style={[
-                    styles.filterOption,
-                    { backgroundColor: colors.surfaceLight, borderColor: colors.border },
-                    photosOnly && { borderColor: colors.primary + '70', backgroundColor: colors.primary + '12' },
-                  ]}
-                >
-                  <Camera size={18} color={photosOnly ? colors.primary : colors.textSecondary} />
-                  <Text style={[styles.filterOptionText, { color: photosOnly ? colors.primary : colors.textSecondary }]}>Avec photos</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={() => setRevisitOnly((prev) => !prev)}
-                  style={[
-                    styles.filterOption,
-                    { backgroundColor: colors.surfaceLight, borderColor: colors.border },
-                    revisitOnly && { borderColor: colors.success + '70', backgroundColor: colors.success + '12' },
-                  ]}
-                >
-                  <Heart size={18} color={revisitOnly ? colors.success : colors.textSecondary} fill={revisitOnly ? colors.success : 'transparent'} />
-                  <Text style={[styles.filterOptionText, { color: revisitOnly ? colors.success : colors.textSecondary }]}>À refaire</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={() => setMinRating((prev) => prev === 4 ? null : 4)}
-                  style={[
-                    styles.filterOption,
-                    { backgroundColor: colors.surfaceLight, borderColor: colors.border },
-                    minRating === 4 && { borderColor: colors.warning + '70', backgroundColor: colors.warning + '12' },
-                  ]}
-                >
-                  <Star size={18} color={minRating === 4 ? colors.warning : colors.textSecondary} fill={minRating === 4 ? colors.warning : 'transparent'} />
-                  <Text style={[styles.filterOptionText, { color: minRating === 4 ? colors.warning : colors.textSecondary }]}>4+ étoiles</Text>
-                </TouchableOpacity>
-              </View>
-
-              <Text style={[styles.filterSectionTitle, { color: colors.textPrimary }]}>Tri</Text>
-              <View style={styles.filterChipGrid}>
-                {[
-                  { key: 'recent', label: 'Récents' },
-                  { key: 'visited', label: 'Passage' },
-                  { key: 'rating', label: 'Note' },
-                  { key: 'name', label: 'A-Z' },
-                  { key: 'price_low', label: 'Prix +' },
-                  { key: 'price_high', label: 'Prix -' },
-                ].map((item) => {
-                  const selected = sort === item.key;
-                  return (
-                    <TouchableOpacity
-                      key={item.key}
-                      onPress={() => setSort(item.key as RestaurantSortOption)}
-                      style={[
-                        styles.modalChip,
-                        { backgroundColor: colors.surfaceLight, borderColor: colors.border },
-                        selected && { backgroundColor: colors.primary + '18', borderColor: colors.primary + '70' },
-                      ]}
-                    >
-                      <Text style={[styles.chipText, { color: selected ? colors.primary : colors.textSecondary }]}>
-                        {item.label}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
+              <Text style={[styles.sectionLabel, { color: colors.textPrimary }]}>Trier</Text>
+              <Text style={[styles.selectionHint, { color: colors.textMuted }]}>{selectedSortLabel}</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalOptions}>
+                {([
+                  ['recent', 'Ajout récent'], ['rating', 'Note'], ['visited', 'Dernier passage'], ['name', 'Nom'], ['price_low', 'Prix croissant'], ['price_high', 'Prix décroissant'],
+                ] as const).map(([value, label]) => <Option key={value} label={label} selected={sort === value} onPress={() => setSort(value)} />)}
+              </ScrollView>
             </ScrollView>
-
-            <View style={styles.filterFooter}>
-              <TouchableOpacity
-                style={[styles.filterSecondaryBtn, { backgroundColor: colors.surfaceLight }]}
-                onPress={clearFilters}
-              >
-                <Text style={[styles.filterSecondaryText, { color: colors.textSecondary }]}>Réinitialiser</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.filterPrimaryBtn, { backgroundColor: colors.primary }, Shadows.sm]}
-                onPress={() => setFilterModalVisible(false)}
-              >
-                <Text style={[styles.filterPrimaryText, { color: colors.textOnPrimary }]}>Voir les résultats</Text>
-              </TouchableOpacity>
+            <View style={[styles.filterFooter, compactControls && styles.filterFooterCompact, { backgroundColor: colors.surface, paddingBottom: insets.bottom + Spacing.md }]}>
+              <Pressable onPress={resetAdvanced} style={({ pressed }) => [styles.secondaryButton, { borderColor: colors.border, opacity: pressed ? 0.55 : 1 }]}>
+                <Text style={[styles.secondaryButtonText, { color: colors.textPrimary }]}>Réinitialiser</Text>
+              </Pressable>
+              <Pressable onPress={() => setFiltersOpen(false)} style={({ pressed }) => [styles.applyButton, { backgroundColor: colors.accent, opacity: pressed ? 0.72 : 1 }]}>
+                <Text style={[styles.applyText, { color: colors.textOnAccent }]}>Voir {filtered.length} adresse{filtered.length !== 1 ? 's' : ''}</Text>
+              </Pressable>
             </View>
           </View>
         </View>
       </Modal>
-    </View>
+    </KeyboardAvoidingView>
   );
+
+  function Option({ label, selected, onPress }: { label: string; selected: boolean; onPress: () => void }) {
+    return (
+      <Pressable
+        onPress={onPress}
+        accessibilityRole="checkbox"
+        accessibilityState={{ checked: selected }}
+        style={({ pressed }) => [
+          styles.option,
+          {
+            backgroundColor: selected ? `${colors.accent}18` : colors.surfaceLight,
+            borderColor: selected ? colors.accent : colors.textPrimary,
+            opacity: pressed ? 0.62 : 1,
+          },
+        ]}
+      >
+        <Text style={[styles.optionText, { color: selected ? colors.accent : colors.textPrimary }]}>{label}</Text>
+      </Pressable>
+    );
+  }
+
+  function PreferenceRow({ label, selected, onPress }: { label: string; selected: boolean; onPress: () => void }) {
+    return (
+      <Pressable
+        onPress={onPress}
+        accessibilityRole="checkbox"
+        accessibilityState={{ checked: selected }}
+        style={({ pressed }) => [styles.preferenceRow, { opacity: pressed ? 0.62 : 1 }]}
+      >
+        <Text style={[styles.preferenceLabel, { color: colors.textPrimary }]}>{label}</Text>
+        <View style={[styles.preferenceMark, { borderColor: selected ? colors.accent : colors.border, backgroundColor: selected ? colors.accent : 'transparent' }]}>
+          {selected ? <Check size={14} color={colors.textOnAccent} strokeWidth={3} /> : null}
+        </View>
+      </Pressable>
+    );
+  }
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  mainHeaderContent: {
-    paddingHorizontal: Spacing.xl,
-    paddingBottom: Spacing.xl,
-  },
-  titleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: Spacing.sm,
-    justifyContent: 'space-between',
-  },
-  themeToggle: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  mainTitle: {
-    fontSize: FontSize.title,
-    fontFamily: FontFamily.bold,
-    letterSpacing: -0.5,
-  },
-  countBadge: {
-    marginLeft: Spacing.md,
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 4,
-    borderRadius: BorderRadius.full,
-  },
-  countText: {
-    fontSize: FontSize.sm,
-    fontFamily: FontFamily.bold,
-  },
-  subtitle: {
-    fontSize: FontSize.md,
-    fontFamily: FontFamily.medium,
-    marginBottom: Spacing.xl,
-  },
-  insightPanel: {
-    borderWidth: 1,
-    borderRadius: BorderRadius.xxl,
-    padding: Spacing.md,
-    marginBottom: Spacing.lg,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  insightItem: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  insightIcon: {
-    width: 34,
-    height: 34,
-    borderRadius: BorderRadius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: Spacing.xs,
-  },
-  insightValue: {
-    fontSize: FontSize.lg,
-    fontFamily: FontFamily.bold,
-    lineHeight: 22,
-  },
-  insightLabel: {
-    marginTop: 2,
-    fontSize: 11,
-    fontFamily: FontFamily.semiBold,
-  },
-  insightDivider: {
-    width: 1,
-    height: 54,
-    opacity: 0.8,
-  },
-  searchContainer: {
-    marginTop: Spacing.xs,
-    marginBottom: Spacing.md,
-  },
-  searchBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: BorderRadius.xxl,
-    paddingHorizontal: Spacing.lg,
-    height: 56,
-  },
-  searchIcon: {
-    marginRight: Spacing.sm,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: FontSize.md,
-    fontFamily: FontFamily.medium,
-    height: '100%',
-  },
-  headerActionsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: Spacing.md,
-    gap: Spacing.sm,
-    flexWrap: 'wrap',
-  },
-  quickAction: {
-    height: 38,
-    borderRadius: BorderRadius.full,
-    paddingHorizontal: Spacing.md,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  quickActionText: {
-    fontSize: FontSize.xs,
-    fontFamily: FontFamily.bold,
-  },
-  quickActionLight: {
-    height: 38,
-    borderRadius: BorderRadius.full,
-    paddingHorizontal: Spacing.md,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  quickActionLightText: {
-    fontSize: FontSize.xs,
-    fontFamily: FontFamily.semiBold,
-  },
-  chipText: {
-    fontSize: FontSize.xs,
-    fontFamily: FontFamily.semiBold,
-  },
-  resultMeta: {
-    marginTop: Spacing.sm,
-    fontSize: FontSize.xs,
-    fontFamily: FontFamily.medium,
-  },
-  filterBackdrop: {
-    flex: 1,
-    justifyContent: 'flex-end',
-    backgroundColor: 'rgba(15, 23, 42, 0.42)',
-  },
-  filterSheet: {
-    maxHeight: '86%',
-    borderTopLeftRadius: BorderRadius.xxl,
-    borderTopRightRadius: BorderRadius.xxl,
-    borderWidth: 1,
-    borderBottomWidth: 0,
-    paddingHorizontal: Spacing.xl,
-    paddingTop: Spacing.md,
-  },
-  filterHandle: {
-    width: 42,
-    height: 5,
-    borderRadius: BorderRadius.full,
-    alignSelf: 'center',
-    backgroundColor: 'rgba(148, 163, 184, 0.45)',
-    marginBottom: Spacing.lg,
-  },
-  filterHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: Spacing.lg,
-  },
-  filterTitle: {
-    fontSize: FontSize.xxl,
-    fontFamily: FontFamily.bold,
-  },
-  filterSubtitle: {
-    marginTop: 2,
-    fontSize: FontSize.sm,
-    fontFamily: FontFamily.medium,
-  },
-  filterCloseBtn: {
-    width: 42,
-    height: 42,
-    borderRadius: BorderRadius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  filterContent: {
-    paddingBottom: Spacing.xl,
-  },
-  filterSectionTitle: {
-    fontSize: FontSize.md,
-    fontFamily: FontFamily.bold,
-    marginTop: Spacing.md,
-    marginBottom: Spacing.sm,
-  },
-  filterChipGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Spacing.sm,
-  },
-  modalChip: {
-    minHeight: 38,
-    borderRadius: BorderRadius.full,
-    paddingHorizontal: Spacing.md,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'row',
-  },
-  filterOptionGrid: {
-    gap: Spacing.sm,
-  },
-  filterOption: {
-    minHeight: 52,
-    borderRadius: BorderRadius.xl,
-    borderWidth: 1,
-    paddingHorizontal: Spacing.md,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm,
-  },
-  filterOptionText: {
-    fontSize: FontSize.sm,
-    fontFamily: FontFamily.bold,
-  },
-  filterFooter: {
-    flexDirection: 'row',
-    gap: Spacing.md,
-    paddingTop: Spacing.md,
-  },
-  filterSecondaryBtn: {
-    flex: 1,
-    height: 52,
-    borderRadius: BorderRadius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  filterSecondaryText: {
-    fontSize: FontSize.sm,
-    fontFamily: FontFamily.bold,
-  },
-  filterPrimaryBtn: {
-    flex: 1.3,
-    height: 52,
-    borderRadius: BorderRadius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  filterPrimaryText: {
-    fontSize: FontSize.sm,
-    fontFamily: FontFamily.bold,
-  },
-  list: {
-    paddingTop: Spacing.sm,
-  },
-  emptyContainer: {
-    flexGrow: 1,
-  },
-  fab: {
-    position: 'absolute',
-    right: Spacing.xl,
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  screen: { flex: 1 },
+  header: { paddingHorizontal: Spacing.lg, paddingBottom: Spacing.lg },
+  stats: { marginTop: Spacing.xxl, padding: Spacing.lg, flexDirection: 'row', borderWidth: 1.5, borderRadius: 12 },
+  stat: { flex: 1, alignItems: 'center' },
+  statValue: { fontFamily: FontFamily.semiBold, fontSize: FontSize.lg },
+  statLabel: { marginTop: 2, fontFamily: FontFamily.regular, fontSize: FontSize.xs },
+  search: { minHeight: 52, marginTop: Spacing.xl, paddingHorizontal: Spacing.md, flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, borderWidth: 1.5, borderRadius: 10 },
+  searchInput: { flex: 1, minHeight: 46, fontFamily: FontFamily.regular, fontSize: FontSize.md },
+  sourceTabs: { marginTop: Spacing.md, padding: 4, flexDirection: 'row', borderRadius: 8 },
+  sourceTabsCompact: { flexDirection: 'column' },
+  sourceTab: { flex: 1, minHeight: 44, paddingHorizontal: 4, alignItems: 'center', justifyContent: 'center', borderRadius: 5 },
+  sourceTabCompact: { flex: 0, width: '100%' },
+  sourceTabText: { fontFamily: FontFamily.semiBold, fontSize: FontSize.xs, textAlign: 'center' },
+  resultRow: { minHeight: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  resultRowCompact: { minHeight: 76, paddingVertical: Spacing.xs, flexDirection: 'column', alignItems: 'stretch', justifyContent: 'center' },
+  resultText: { fontFamily: FontFamily.medium, fontSize: FontSize.xs },
+  inlineActions: { flexDirection: 'row', alignItems: 'center', gap: Spacing.lg },
+  inlineActionsCompact: { alignSelf: 'stretch', justifyContent: 'flex-end' },
+  textAction: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 6 },
+  textActionLabel: { fontFamily: FontFamily.semiBold, fontSize: FontSize.xs },
+  modalRoot: { flex: 1, justifyContent: 'flex-end' },
+  sheet: { height: '88%', overflow: 'hidden', paddingTop: Spacing.sm, borderTopLeftRadius: 18, borderTopRightRadius: 18, borderWidth: 1.5 },
+  sheetHandle: { width: 36, height: 4, alignSelf: 'center', marginBottom: Spacing.md, borderRadius: BorderRadius.full },
+  sheetHeader: { minHeight: 52, marginBottom: Spacing.sm, paddingHorizontal: Spacing.xl, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: Spacing.md },
+  sheetHeaderCopy: { flex: 1 },
+  sheetTitle: { fontFamily: FontFamily.semiBold, fontSize: FontSize.xl },
+  sheetSubtitle: { marginTop: 3, fontFamily: FontFamily.regular, fontSize: FontSize.xs },
+  closeButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  filterScroll: { flex: 1 },
+  filterContent: { paddingHorizontal: Spacing.xl, paddingBottom: 0 },
+  sectionLabel: { marginTop: Spacing.lg, marginBottom: 3, fontFamily: FontFamily.semiBold, fontSize: FontSize.sm },
+  selectionHint: { fontFamily: FontFamily.regular, fontSize: FontSize.xs },
+  horizontalOptions: { paddingVertical: Spacing.sm, paddingRight: Spacing.xl, gap: Spacing.sm },
+  option: { minHeight: 44, paddingHorizontal: Spacing.md, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderRadius: 8 },
+  optionText: { fontFamily: FontFamily.medium, fontSize: FontSize.xs },
+  preferenceList: { marginTop: Spacing.sm, padding: Spacing.sm, borderWidth: 1.5, borderRadius: 10 },
+  preferenceRow: { minHeight: 48, paddingHorizontal: Spacing.sm, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderRadius: BorderRadius.md },
+  preferenceLabel: { fontFamily: FontFamily.medium, fontSize: FontSize.sm },
+  preferenceMark: { width: 22, height: 22, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderRadius: 11 },
+  preferenceCheck: { fontFamily: FontFamily.bold, fontSize: 14, lineHeight: 17 },
+  filterFooter: { marginTop: -1, paddingHorizontal: Spacing.xl, paddingTop: Spacing.md, flexDirection: 'row', gap: Spacing.sm, shadowOpacity: 0, elevation: 0 },
+  filterFooterCompact: { flexDirection: 'column' },
+  secondaryButton: { minHeight: 50, paddingHorizontal: Spacing.lg, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderRadius: BorderRadius.md },
+  secondaryButtonText: { fontFamily: FontFamily.semiBold, fontSize: FontSize.sm },
+  applyButton: { flex: 1, minHeight: 50, alignItems: 'center', justifyContent: 'center', borderRadius: BorderRadius.md },
+  applyText: { fontFamily: FontFamily.semiBold, fontSize: FontSize.sm },
 });

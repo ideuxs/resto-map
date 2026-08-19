@@ -1,1141 +1,906 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  View,
-  Text,
-  Image,
-  TouchableOpacity,
-  StyleSheet,
   Alert,
-  Dimensions,
   FlatList,
-  Animated,
-  StatusBar,
   Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+  useWindowDimensions,
 } from 'react-native';
+import { Image } from 'expo-image';
+import MapView, { Marker } from 'react-native-maps';
+import * as Linking from 'expo-linking';
 import { useFocusEffect } from '@react-navigation/native';
-import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { BlurView } from 'expo-blur';
-import { LinearGradient } from 'expo-linear-gradient';
-import { MapPin, Coins, FolderPlus, Pencil, Trash2, ArrowLeft, X, Camera, Check, Folder, Star, Heart, Calendar, Tag } from 'lucide-react-native';
-
-import { Restaurant, RestaurantsStackParamList, Collection } from '../types';
 import {
-  getRestaurants,
-  deleteRestaurant,
-  getCollections,
+  ArrowLeft,
+  CalendarDays,
+  Check,
+  ChevronRight,
+  Heart,
+  ListPlus,
+  LockKeyhole,
+  MapPin,
+  Navigation2,
+  Pencil,
+  Plus,
+  Sparkles,
+  Star,
+  Trash2,
+  UsersRound,
+  X,
+} from '../components/FlaticonIcon';
+
+import { Collection, Restaurant, Visit } from '../types';
+import {
+  addCollectionsChangeListener,
   addRestaurantToCollection,
   addRestaurantsChangeListener,
-  addCollectionsChangeListener,
+  addVisitsChangeListener,
+  deleteVisit,
+  deleteRestaurant,
+  getCollections,
+  getRestaurants,
+  getVisits,
+  removeRestaurantFromCollection,
 } from '../storage/storage';
-import { deleteImages } from '../storage/imageStorage';
 import { CATEGORIES } from '../constants/categories';
+import { getCollectionIcon } from '../constants/collectionIcons';
+import PlaceArtwork from '../components/PlaceArtwork';
+import EmptyState from '../components/EmptyState';
+import VisitFormModal from '../components/VisitFormModal';
 import { useTheme } from '../theme/ThemeProvider';
-import { Spacing, BorderRadius, FontSize, FontFamily, Shadows } from '../constants/theme';
+import { BorderRadius, FontFamily, FontSize, getSourceColor, isSourceColorKey, Shadows, sourceColorKeyFor, Spacing } from '../constants/theme';
+import { priceBandLabel } from '../domain/priceBands';
+import { Utensils } from '../components/FlaticonIcon';
 
-type Props = NativeStackScreenProps<RestaurantsStackParamList, 'RestaurantDetail'>;
-const { width } = Dimensions.get('window');
-const HEADER_HEIGHT = 380;
+type Props = { route: any; navigation: any };
 
-function formatVisitDate(value?: string): string | null {
-  if (!value) return null;
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return null;
-  return date.toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' });
+function formatVisitDate(value: string) {
+  return new Date(value).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
 }
+
+function formatAmount(value: number) {
+  return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(value);
+}
+
+const MINI_MAP_DARK_STYLE = [
+  { elementType: 'geometry', stylers: [{ color: '#17121E' }] },
+  { elementType: 'labels.text.fill', stylers: [{ color: '#C9A5DF' }] },
+  { elementType: 'labels.text.stroke', stylers: [{ color: '#100D18' }] },
+  { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#332940' }] },
+  { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#49385B' }] },
+  { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#171D38' }] },
+];
 
 export default function RestaurantDetailScreen({ route, navigation }: Props) {
   const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
   const [restaurant, setRestaurant] = useState<Restaurant | null>(null);
   const [collections, setCollections] = useState<Collection[]>([]);
-  const [imgIndex, setImgIndex] = useState(0);
-  const [selectedImg, setSelectedImg] = useState<string | null>(null);
-  const [saveModalVisible, setSaveModalVisible] = useState(false);
-  const [savingCollectionId, setSavingCollectionId] = useState<string | null>(null);
+  const [visits, setVisits] = useState<Visit[]>([]);
+  const [listModalOpen, setListModalOpen] = useState(false);
+  const [visitModalOpen, setVisitModalOpen] = useState(false);
+  const [editingVisit, setEditingVisit] = useState<Visit | null>(null);
+  const [galleryOpen, setGalleryOpen] = useState(false);
+  const [galleryIndex, setGalleryIndex] = useState(0);
 
-  const scrollY = useRef(new Animated.Value(0)).current;
-  const saveModalAnim = useRef(new Animated.Value(0)).current;
+  const load = useCallback(async () => {
+    const [allRestaurants, allCollections] = await Promise.all([getRestaurants(), getCollections()]);
+    const nextRestaurant = allRestaurants.find((item) => item.id === route.params.restaurantId) || null;
+    const nextVisits = nextRestaurant ? await getVisits(nextRestaurant.placeId || nextRestaurant.id) : [];
+    setRestaurant(nextRestaurant);
+    setCollections(allCollections.filter((collection) => collection.kind !== 'imported'));
+    setVisits(nextVisits);
+  }, [route.params.restaurantId]);
 
-  useFocusEffect(
-    useCallback(() => {
-      loadData();
-    }, [])
-  );
+  useFocusEffect(useCallback(() => { load(); }, [load]));
+  useEffect(() => {
+    const offRestaurants = addRestaurantsChangeListener(load);
+    const offCollections = addCollectionsChangeListener(load);
+    const offVisits = addVisitsChangeListener(load);
+    return () => { offRestaurants(); offCollections(); offVisits(); };
+  }, [load]);
 
-  React.useEffect(() => {
-    const unsubscribeRestaurants = addRestaurantsChangeListener(loadData);
-    const unsubscribeCollections = addCollectionsChangeListener(loadData);
-    return () => {
-      unsubscribeRestaurants();
-      unsubscribeCollections();
-    };
-  }, []);
-
-  const loadData = async () => {
-    const all = await getRestaurants();
-    const found = all.find((r) => r.id === route.params.restaurantId);
-    setRestaurant(found || null);
-    const cols = await getCollections();
-    setCollections(cols);
-  };
-
-  const handleDelete = () => {
-    Alert.alert(
-      'Supprimer',
-      `Supprimer "${restaurant?.name}" ?`,
-      [
-        { text: 'Annuler', style: 'cancel' },
-        {
-          text: 'Supprimer',
-          style: 'destructive',
-          onPress: async () => {
-            if (restaurant) {
-              await deleteImages(restaurant.images);
-              await deleteRestaurant(restaurant.id);
-              navigation.goBack();
-            }
-          },
-        },
-      ]
-    );
-  };
-
-  const openSaveModal = () => {
-    setSaveModalVisible(true);
-    Animated.spring(saveModalAnim, {
-      toValue: 1,
-      useNativeDriver: true,
-      damping: 20,
-      stiffness: 90,
-    }).start();
-  };
-
-  const closeSaveModal = () => {
-    Animated.timing(saveModalAnim, {
-      toValue: 0,
-      duration: 250,
-      useNativeDriver: true,
-    }).start(() => setSaveModalVisible(false));
-  };
-
-  const handleAddToCollection = () => {
-    openSaveModal();
-  };
-
-  const handleSelectCollection = async (collection: Collection) => {
-    if (!restaurant || savingCollectionId) return;
-    try {
-      setSavingCollectionId(collection.id);
-      await addRestaurantToCollection(collection.id, restaurant.id);
-      await loadData();
-      Alert.alert('Ajout avec succes', `Dans la collection "${collection.name}"`);
-      closeSaveModal();
-    } finally {
-      setSavingCollectionId(null);
-    }
-  };
+  const membership = useMemo(() => new Set(
+    collections.filter((collection) => collection.restaurantIds.includes(restaurant?.id || '')).map((collection) => collection.id)
+  ), [collections, restaurant?.id]);
 
   if (!restaurant) {
     return (
-      <View style={[styles.container, { backgroundColor: colors.background, justifyContent: 'center' }]}>
-        <Text style={[styles.notFound, { color: colors.textMuted }]}>Restaurant introuvable</Text>
+      <View style={[styles.screen, { backgroundColor: colors.background, paddingTop: insets.top }]}>
+        <EmptyState icon={Utensils} title="Adresse introuvable" subtitle="Elle a peut-être été supprimée." actionLabel="Retour" onAction={() => navigation.goBack()} />
       </View>
     );
   }
 
-  const cat = CATEGORIES[restaurant.category];
-  const CategoryIcon = cat.icon;
-  const imageCountText = `${restaurant.images.length} photo${restaurant.images.length > 1 ? 's' : ''}`;
-  const visitDateText = formatVisitDate(restaurant.visitedAt);
-  const hasJournal = restaurant.rating || visitDateText || restaurant.wouldReturn || restaurant.signatureDish || (restaurant.tags || []).length > 0;
+  const category = CATEGORIES[restaurant.category] || CATEGORIES.autre;
+  const CategoryIcon = category.icon;
+  const imported = restaurant.origin?.kind === 'imported';
+  const friendSource = imported ? restaurant.origin : restaurant.sources?.[0];
+  const sourceKey = isSourceColorKey(friendSource?.sourceColorKey)
+    ? friendSource.sourceColorKey
+    : sourceColorKeyFor(friendSource?.ownerId || friendSource?.ownerName || restaurant.id);
+  const sourceColor = getSourceColor(sourceKey, isDark ? 'dark' : 'light');
+  const ratedVisits = visits.filter((visit) => visit.rating != null);
+  const averageRating = ratedVisits.length
+    ? ratedVisits.reduce((sum, visit) => sum + (visit.rating || 0), 0) / ratedVisits.length
+    : null;
+  const lastVisit = visits[0];
+  const rememberedDishes = Array.from(new Set(
+    visits.flatMap((visit) => visit.dishes.map((dish) => dish.trim()).filter(Boolean))
+  ));
 
-  const priceText = () => {
-    const parts: string[] = [];
-    if (restaurant.priceMin != null && restaurant.priceMax != null) {
-      parts.push(`${restaurant.priceMin}€ – ${restaurant.priceMax}€`);
-    }
-    if (restaurant.priceLevel) {
-      parts.push('€'.repeat(restaurant.priceLevel));
-    }
-    return parts.join(' · ') || null;
+  const remove = () => {
+    Alert.alert('Supprimer cette adresse ?', 'Elle sera retirée de votre carnet et de vos listes.', [
+      { text: 'Annuler', style: 'cancel' },
+      {
+        text: 'Supprimer',
+        style: 'destructive',
+        onPress: async () => {
+          await deleteRestaurant(restaurant.id);
+          navigation.goBack();
+        },
+      },
+    ]);
+  };
+
+  const toggleCollection = async (collection: Collection) => {
+    if (membership.has(collection.id)) await removeRestaurantFromCollection(collection.id, restaurant.id);
+    else await addRestaurantToCollection(collection.id, restaurant.id);
+    await load();
+  };
+
+  const openSourceList = () => {
+    const collectionId = friendSource?.collectionId;
+    if (!collectionId) return;
+    const firstParent = navigation.getParent?.();
+    const secondParent = firstParent?.getParent?.();
+    const thirdParent = secondParent?.getParent?.();
+    const tabNavigator = [firstParent, secondParent, thirdParent].find((parent) =>
+      parent?.getState?.().routeNames?.includes('collections'),
+    );
+    tabNavigator?.navigate('collections', { screen: 'CollectionDetail', params: { collectionId } });
+  };
+
+  const openNewVisit = () => {
+    setEditingVisit(null);
+    setVisitModalOpen(true);
+  };
+
+  const openVisit = (visit: Visit) => {
+    setEditingVisit(visit);
+    setVisitModalOpen(true);
+  };
+
+  const removeVisit = (visit: Visit) => {
+    Alert.alert('Supprimer cette visite ?', 'Cette note privée sera définitivement supprimée.', [
+      { text: 'Annuler', style: 'cancel' },
+      {
+        text: 'Supprimer',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await deleteVisit(visit.id);
+          } catch {
+            Alert.alert('Suppression impossible', 'Réessayez dans quelques instants.');
+          }
+        },
+      },
+    ]);
+  };
+
+  const openDirections = () => {
+    if (!restaurant.location) return;
+    const { latitude, longitude } = restaurant.location;
+    Linking.openURL(`http://maps.apple.com/?daddr=${latitude},${longitude}&dirflg=d`).catch(() => undefined);
+  };
+
+  const openGallery = (index: number) => {
+    setGalleryIndex(index);
+    setGalleryOpen(true);
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
-
-      {/* Floating Navigation */}
-      <View style={[styles.navHeader, { paddingTop: insets.top + Spacing.xs }]} pointerEvents="box-none">
-        <TouchableOpacity onPress={() => navigation.goBack()} activeOpacity={0.8}>
-          <BlurView intensity={60} tint="dark" style={styles.backButton}>
-            <ArrowLeft size={24} color="#FFF" />
-          </BlurView>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          onPress={() => navigation.navigate('AddRestaurant', { restaurant })}
-          activeOpacity={0.85}
-        >
-          <BlurView intensity={60} tint="dark" style={styles.backButton}>
-            <Pencil size={20} color="#FFF" />
-          </BlurView>
-        </TouchableOpacity>
+    <View style={[styles.screen, { backgroundColor: colors.background }]}>
+      <View style={[styles.topBar, { paddingTop: insets.top, backgroundColor: colors.background, borderColor: colors.border }]}>
+        <Pressable onPress={() => navigation.goBack()} accessibilityLabel="Retour" style={styles.topAction}>
+          <ArrowLeft size={23} color={colors.textPrimary} />
+        </Pressable>
+        <Text style={[styles.topTitle, { color: colors.textPrimary }]} numberOfLines={1}>{restaurant.name}</Text>
+        {!imported ? (
+          <Pressable onPress={() => navigation.navigate('AddRestaurant', { restaurant })} accessibilityLabel="Modifier" style={styles.topAction}>
+            <Pencil size={21} color={colors.textPrimary} />
+          </Pressable>
+        ) : <View style={styles.topAction} />}
       </View>
 
-      <Animated.ScrollView
-        showsVerticalScrollIndicator={false}
-        scrollEventThrottle={16}
-        onScroll={Animated.event(
-          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-          { useNativeDriver: true }
-        )}
-      >
-        {/* Hero Image Gallery */}
-        {restaurant.images.length > 0 ? (
-          <View style={styles.heroContainer}>
+      <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + 120 }} showsVerticalScrollIndicator={false}>
+        {restaurant.images.length ? (
+          <View style={styles.hero}>
             <FlatList
               data={restaurant.images}
               horizontal
               pagingEnabled
-              nestedScrollEnabled
+              keyExtractor={(item, index) => `${item}-${index}`}
               showsHorizontalScrollIndicator={false}
-              style={{ height: HEADER_HEIGHT }}
-              onMomentumScrollEnd={(e) => {
-                const idx = Math.round(e.nativeEvent.contentOffset.x / width);
-                setImgIndex(idx);
-              }}
-              keyExtractor={(item, i) => `${item}-${i}`}
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  activeOpacity={0.9}
-                  onPress={() => setSelectedImg(item)}
-                  style={{ width, height: HEADER_HEIGHT }}
-                >
-                  <Image
-                    source={{ uri: item }}
-                    style={{ width, height: HEADER_HEIGHT }}
-                    resizeMode="cover"
-                  />
-                </TouchableOpacity>
+              onMomentumScrollEnd={(event) => setGalleryIndex(Math.round(event.nativeEvent.contentOffset.x / width))}
+              renderItem={({ item, index }) => (
+                <Pressable onPress={() => openGallery(index)} accessibilityRole="imagebutton" accessibilityLabel={`Ouvrir la photo ${index + 1} de ${restaurant.images.length}`}>
+                  <Image source={item} style={[styles.heroImage, { width }]} contentFit="cover" transition={180} />
+                </Pressable>
               )}
             />
-            <LinearGradient
-              colors={['transparent', 'rgba(0,0,0,0.72)', colors.background]}
-              style={styles.heroGradient}
-              locations={[0.35, 0.78, 1]}
-              pointerEvents="none"
-            />
-
-            {restaurant.images.length > 1 && (
-              <View style={styles.dots} pointerEvents="none">
-                {restaurant.images.map((_, i) => (
-                  <View
-                    key={i}
-                    style={[styles.dot, i === imgIndex && styles.dotActive]}
-                  />
-                ))}
-              </View>
-            )}
-
-            <View style={styles.heroMetaCard} pointerEvents="none">
-              <View style={styles.heroMetaTopRow}>
-                <View style={[styles.heroCatPill, { backgroundColor: cat.color + '30', borderColor: cat.color + '55' }]}>
-                  <CategoryIcon size={13} color="#FFF" style={{ marginRight: 5 }} />
-                  <Text style={styles.heroCatText}>{cat.label}</Text>
-                </View>
-                <View style={styles.heroPhotoCount}>
-                  <Camera size={13} color="#FFF" style={{ marginRight: 5 }} />
-                  <Text style={styles.heroPhotoText}>{imageCountText}</Text>
-                </View>
-              </View>
-              <Text style={styles.heroName} numberOfLines={2}>{restaurant.name}</Text>
-              {priceText() ? (
-                <Text style={styles.heroPrice}>{priceText()}</Text>
-              ) : null}
-            </View>
-          </View>
-        ) : (
-          <View style={[styles.heroContainer, { backgroundColor: colors.surfaceLight, alignItems: 'center', justifyContent: 'center' }]}>
-            <CategoryIcon size={80} color={cat.color} strokeWidth={1} opacity={0.2} />
-            <LinearGradient
-              colors={['transparent', colors.background]}
-              style={styles.heroGradient}
-              locations={[0.5, 1]}
-            />
-            <View style={styles.heroMetaCard} pointerEvents="none">
-              <View style={styles.heroMetaTopRow}>
-                <View style={[styles.heroCatPill, { backgroundColor: cat.color + '30', borderColor: cat.color + '55' }]}>
-                  <CategoryIcon size={13} color="#FFF" style={{ marginRight: 5 }} />
-                  <Text style={styles.heroCatText}>{cat.label}</Text>
-                </View>
-                <View style={styles.heroPhotoCount}>
-                  <Camera size={13} color="#FFF" style={{ marginRight: 5 }} />
-                  <Text style={styles.heroPhotoText}>{imageCountText}</Text>
-                </View>
-              </View>
-              <Text style={styles.heroName} numberOfLines={2}>{restaurant.name}</Text>
-              {priceText() ? (
-                <Text style={styles.heroPrice}>{priceText()}</Text>
-              ) : null}
-            </View>
-          </View>
-        )}
-
-        {/* Content Section */}
-        <View style={[styles.content, { backgroundColor: colors.background }]}>
-          <View style={[styles.grabHandle, { backgroundColor: colors.border }]} />
-
-          <View style={[styles.overviewCard, { backgroundColor: colors.surface, borderColor: colors.border }, Shadows.sm]}>
-            <View style={styles.headerInfo}>
-              <View style={{ flex: 1 }}>
-                <Text style={[styles.eyebrow, { color: colors.textMuted }]}>Résumé</Text>
-                <Text style={[styles.name, { color: colors.textPrimary }]} numberOfLines={2}>{restaurant.name}</Text>
-              </View>
-
-              <View style={[styles.badge, { backgroundColor: cat.color + '16', borderColor: cat.color + '35' }]}>
-                <CategoryIcon size={14} color={cat.color} style={{ marginRight: 6 }} />
-                <Text style={[styles.badgeText, { color: cat.color }]}>
-                  {cat.label}
-                </Text>
-              </View>
-            </View>
-
-            <View style={styles.infoBlocks}>
-              {restaurant.address ? (
-                <View style={[styles.infoRow, styles.infoCard, { backgroundColor: colors.background, borderColor: colors.border }]}>
-                  <View style={[styles.iconBox, { backgroundColor: colors.surfaceLight }]}>
-                    <MapPin size={20} color={colors.textSecondary} />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.infoLabel, { color: colors.textMuted }]}>Adresse</Text>
-                    <Text style={[styles.infoText, { color: colors.textSecondary }]}>{restaurant.address}</Text>
-                  </View>
-                </View>
-              ) : null}
-
-              {priceText() ? (
-                <View style={[styles.infoRow, styles.infoCard, { backgroundColor: colors.background, borderColor: colors.border }]}>
-                  <View style={[styles.iconBox, { backgroundColor: colors.primary + '15' }]}>
-                    <Coins size={20} color={colors.primary} />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.infoLabel, { color: colors.textMuted }]}>Budget</Text>
-                    <Text style={[styles.infoText, { color: colors.textPrimary, fontFamily: FontFamily.bold }]}>{priceText()}</Text>
-                  </View>
-                </View>
-              ) : null}
-
-              <View style={[styles.infoRow, styles.infoCard, { backgroundColor: colors.background, borderColor: colors.border }]}>
-                <View style={[styles.iconBox, { backgroundColor: colors.surfaceLight }]}>
-                  <Camera size={20} color={colors.textSecondary} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.infoLabel, { color: colors.textMuted }]}>Photos</Text>
-                  <Text style={[styles.infoText, { color: colors.textSecondary }]}>{imageCountText}</Text>
-                </View>
-              </View>
-            </View>
-          </View>
-
-          {hasJournal ? (
-            <View style={[styles.journalSection, { backgroundColor: colors.surface, borderColor: colors.border }, Shadows.sm]}>
-              <View style={styles.journalHeader}>
-                <Text style={[styles.sectionTitle, { color: colors.textPrimary, marginBottom: 0 }]}>Mon passage</Text>
-                {restaurant.wouldReturn ? (
-                  <View style={[styles.returnPill, { backgroundColor: colors.success + '18' }]}>
-                    <Heart size={14} color={colors.success} fill={colors.success} />
-                    <Text style={[styles.returnPillText, { color: colors.success }]}>À refaire</Text>
-                  </View>
-                ) : null}
-              </View>
-
-              <View style={styles.journalGrid}>
-                {restaurant.rating ? (
-                  <View style={[styles.journalTile, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                    <Star size={18} color={colors.warning} fill={colors.warning} />
-                    <Text style={[styles.journalValue, { color: colors.textPrimary }]}>{restaurant.rating}/5</Text>
-                    <Text style={[styles.journalLabel, { color: colors.textMuted }]}>Note</Text>
-                  </View>
-                ) : null}
-
-                {visitDateText ? (
-                  <View style={[styles.journalTileWide, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                    <Calendar size={18} color={colors.primary} />
-                    <View style={{ flex: 1 }}>
-                      <Text style={[styles.journalValueSmall, { color: colors.textPrimary }]}>{visitDateText}</Text>
-                      <Text style={[styles.journalLabel, { color: colors.textMuted }]}>Date de passage</Text>
-                    </View>
-                  </View>
-                ) : null}
-              </View>
-
-              {restaurant.signatureDish ? (
-                <View style={[styles.signatureBox, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                  <Star size={18} color={colors.warning} fill={colors.warning} />
-                  <Text style={[styles.signatureText, { color: colors.textPrimary }]}>À goûter: {restaurant.signatureDish}</Text>
-                </View>
-              ) : null}
-
-              {(restaurant.tags || []).length > 0 ? (
-                <View style={styles.tagsRow}>
-                  {(restaurant.tags || []).map((tag) => (
-                    <View key={tag} style={[styles.tagPill, { backgroundColor: colors.primary + '12', borderColor: colors.primary + '30' }]}>
-                      <Tag size={12} color={colors.primary} />
-                      <Text style={[styles.tagText, { color: colors.primary }]}>{tag}</Text>
-                  </View>
-                ))}
+            {restaurant.images.length > 1 ? (
+              <View style={[styles.photoCounter, { backgroundColor: colors.overlay }]}>
+                <Text style={styles.photoCounterText}>{galleryIndex + 1}/{restaurant.images.length}</Text>
               </View>
             ) : null}
-            </View>
-          ) : null}
-
-          {/* Description Card */}
-          {restaurant.description ? (
-            <View style={[styles.descSection, { backgroundColor: colors.surface, borderColor: colors.border }, Shadows.sm]}>
-              <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>À propos</Text>
-              <Text style={[styles.description, { color: colors.textSecondary }]}>{restaurant.description}</Text>
-            </View>
-          ) : null}
-
-          {/* Actions Grid */}
-          <Text style={[styles.sectionTitle, { color: colors.textPrimary, marginTop: Spacing.xxxl }]}>Actions</Text>
-          <View style={styles.actionsGrid}>
-            <TouchableOpacity
-              style={[styles.actionBtn, { backgroundColor: colors.surface }, Shadows.sm]}
-              onPress={handleAddToCollection}
-            >
-              <View style={[styles.actionIconBox, { backgroundColor: colors.primary + '15' }]}>
-                <FolderPlus size={22} color={colors.primary} />
-              </View>
-              <Text style={[styles.actionText, { color: colors.textPrimary }]}>Sauvegarder</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.actionBtn, { backgroundColor: colors.surface }, Shadows.sm]}
-              onPress={() => navigation.navigate('AddRestaurant', { restaurant })}
-            >
-              <View style={[styles.actionIconBox, { backgroundColor: colors.textMuted + '20' }]}>
-                <Pencil size={22} color={colors.textSecondary} />
-              </View>
-              <Text style={[styles.actionText, { color: colors.textPrimary }]}>Modifier</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.actionBtnWide, { backgroundColor: colors.danger + '10', borderColor: colors.danger + '35' }, Shadows.sm, { shadowColor: colors.danger }]}
-              onPress={handleDelete}
-            >
-              <View style={[styles.actionIconBox, { backgroundColor: colors.danger + '20', marginBottom: 0 }]}> 
-                <Trash2 size={22} color={colors.danger} />
-              </View>
-              <View>
-                <Text style={[styles.actionText, { color: colors.danger }]}>Supprimer</Text>
-                <Text style={[styles.actionSubText, { color: colors.textSecondary }]}>Retirer definitivement cette fiche</Text>
-              </View>
-            </TouchableOpacity>
           </View>
+        ) : (
+          <PlaceArtwork restaurant={restaurant} style={styles.artwork} />
+        )}
+
+        <View style={styles.content}>
+          {friendSource ? (
+            <Pressable onPress={openSourceList} style={({ pressed }) => [styles.sourceRow, Shadows.hard, { backgroundColor: colors.surface, borderColor: colors.textPrimary, opacity: pressed ? 0.66 : 1 }]}>
+              <View style={[styles.sourceIcon, { backgroundColor: `${sourceColor}18` }]}>
+                <UsersRound size={20} color={sourceColor} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.sourceTitle, { color: sourceColor }]}>{imported ? 'Partagée par' : 'Aussi recommandé par'} {friendSource.ownerName || 'un ami'}</Text>
+                <Text style={[styles.sourceDetail, { color: colors.textMuted }]}>{imported ? 'Adresse importée' : 'Votre adresse reste personnelle'} · ouvrir la liste</Text>
+              </View>
+              <ChevronRight size={18} color={colors.textMuted} />
+            </Pressable>
+          ) : null}
+
+          <View style={styles.categoryLine}>
+            <CategoryIcon size={17} color={category.color} />
+            <Text style={[styles.categoryText, { color: colors.textSecondary }]}>{category.label}</Text>
+            {restaurant.location ? <Text style={[styles.locationLabel, { color: colors.accent }]}>Géolocalisé</Text> : null}
+          </View>
+          <Text style={[styles.title, { color: colors.textPrimary }]}>{restaurant.name}</Text>
+          {restaurant.address ? (
+            <View style={styles.addressLine}>
+              <MapPin size={17} color={colors.textMuted} />
+              <Text style={[styles.address, { color: colors.textSecondary }]}>{restaurant.address}</Text>
+            </View>
+          ) : null}
+
+          <View style={styles.actionRow}>
+            <Pressable onPress={openDirections} disabled={!restaurant.location} style={({ pressed }) => [styles.routeAction, { backgroundColor: colors.accent, opacity: !restaurant.location ? 0.4 : pressed ? 0.72 : 1 }]}>
+              <Navigation2 size={17} color={colors.textOnAccent} />
+              <Text style={[styles.routeActionText, { color: colors.textOnAccent }]}>Itinéraire</Text>
+            </Pressable>
+            {!imported ? (
+              <Pressable onPress={() => setListModalOpen(true)} style={({ pressed }) => [styles.secondaryAction, { borderColor: colors.border, opacity: pressed ? 0.62 : 1 }]}>
+                <ListPlus size={17} color={colors.accent} />
+                <Text style={[styles.secondaryActionText, { color: colors.textPrimary }]}>Listes</Text>
+              </Pressable>
+            ) : null}
+          </View>
+
+            <View style={[styles.summary, Shadows.hard, { backgroundColor: colors.surface, borderColor: colors.textPrimary }]}>
+            <SummaryMetric label="Ma note" value={averageRating != null ? `${averageRating.toLocaleString('fr-FR', { maximumFractionDigits: 1 })}/5` : '—'} icon={Star} color={colors.accentYellow} />
+            <SummaryMetric label="Visites" value={String(visits.length)} icon={CalendarDays} color={colors.accent} />
+            <SummaryMetric label="Budget" value={priceBandLabel(restaurant) || 'Non renseigné'} icon={Star} color={colors.accentYellow} />
+          </View>
+
+          <View style={[styles.journalSection, Shadows.hard, { backgroundColor: colors.surface, borderColor: colors.textPrimary }]}>
+            <View style={styles.journalHeader}>
+              <View style={styles.journalHeaderCopy}>
+                <Text style={[styles.sectionTitle, styles.journalTitle, { color: colors.textPrimary }]}>Journal</Text>
+                <View style={styles.privateLine}>
+                  <LockKeyhole size={14} color={colors.textMuted} />
+                  <Text style={[styles.privateText, { color: colors.textMuted }]}>Personnel · jamais partagé</Text>
+                </View>
+              </View>
+              <Pressable
+                onPress={openNewVisit}
+                accessibilityRole="button"
+                style={({ pressed }) => [
+                  styles.addVisitButton,
+                  { backgroundColor: colors.accent, opacity: pressed ? 0.72 : 1 },
+                ]}
+              >
+                <Plus size={18} color={colors.textOnAccent} />
+                <Text style={[styles.addVisitText, { color: colors.textOnAccent }]}>Noter une visite</Text>
+              </Pressable>
+            </View>
+
+            {rememberedDishes.length ? (
+              <View style={[styles.rememberedRow, { backgroundColor: colors.surfaceLight }]}>
+                <Text style={[styles.rememberedLabel, { color: colors.textPrimary }]}>Plats mémorisés</Text>
+                <Text style={[styles.rememberedText, { color: colors.textSecondary }]}>
+                  {rememberedDishes.slice(0, 6).join(' · ')}
+                  {rememberedDishes.length > 6 ? ` · +${rememberedDishes.length - 6}` : ''}
+                </Text>
+              </View>
+            ) : null}
+
+            {visits.length ? (
+              <View style={styles.timeline}>
+                {visits.map((visit) => (
+                  <VisitEntry key={visit.id} visit={visit} />
+                ))}
+              </View>
+            ) : (
+              <View style={[styles.emptyJournal, { backgroundColor: colors.surfaceLight }]}>
+                <Text style={[styles.emptyJournalTitle, { color: colors.textPrimary }]}>Aucune visite personnelle</Text>
+                <Text style={[styles.emptyJournalText, { color: colors.textMuted }]}>Ajoutez un passage pour retrouver vos notes, vos plats et votre moyenne ici.</Text>
+              </View>
+            )}
+          </View>
+
+          {restaurant.signatureDish || restaurant.description || restaurant.tags?.length ? (
+            <View style={[styles.section, Shadows.hard, { backgroundColor: colors.surface, borderColor: colors.textPrimary }]}>
+              {restaurant.description ? (
+                <>
+                  <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>À propos</Text>
+                  <Text style={[styles.body, { color: colors.textSecondary }]}>{restaurant.description}</Text>
+                </>
+              ) : null}
+              {restaurant.signatureDish ? (
+                <View style={restaurant.description ? styles.sectionSubsection : undefined}>
+                  <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Plat à retenir</Text>
+                  <Text style={[styles.body, { color: colors.textPrimary }]}>{restaurant.signatureDish}</Text>
+                </View>
+              ) : null}
+              {restaurant.tags?.length ? (
+                <View style={restaurant.description || restaurant.signatureDish ? styles.sectionSubsection : undefined}>
+                  <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Tags</Text>
+                  <Text style={[styles.body, { color: colors.textSecondary }]}>{restaurant.tags.join(' · ')}</Text>
+                </View>
+              ) : null}
+            </View>
+          ) : null}
+
+          {restaurant.location ? (
+            <View style={[styles.locationSection, Shadows.hard, { backgroundColor: colors.surface, borderColor: colors.textPrimary }]}>
+              <View style={styles.locationHeader}>
+                <View style={styles.locationHeaderCopy}>
+                  <MapPin size={18} color={colors.accent} />
+                  <Text style={[styles.locationTitle, { color: colors.textPrimary }]}>Emplacement</Text>
+                </View>
+                <Pressable
+                  onPress={openDirections}
+                  accessibilityRole="button"
+                  accessibilityLabel="Ouvrir l’itinéraire"
+                  style={({ pressed }) => [styles.locationAction, { opacity: pressed ? 0.58 : 1 }]}
+                >
+                  <Text style={[styles.locationActionText, { color: colors.accent }]}>Itinéraire</Text>
+                  <Navigation2 size={15} color={colors.accent} />
+                </Pressable>
+              </View>
+              <MapView
+                style={styles.detailMap}
+                initialRegion={{
+                  latitude: restaurant.location.latitude,
+                  longitude: restaurant.location.longitude,
+                  latitudeDelta: 0.008,
+                  longitudeDelta: 0.008,
+                }}
+                customMapStyle={isDark ? MINI_MAP_DARK_STYLE : undefined}
+                userInterfaceStyle={isDark ? 'dark' : 'light'}
+                scrollEnabled={false}
+                zoomEnabled={false}
+                rotateEnabled={false}
+                pitchEnabled={false}
+                toolbarEnabled={false}
+                showsCompass={false}
+                showsScale={false}
+                showsBuildings={false}
+              >
+                <Marker
+                  coordinate={{ latitude: restaurant.location.latitude, longitude: restaurant.location.longitude }}
+                  tracksViewChanges={false}
+                  accessibilityLabel={`Emplacement de ${restaurant.name}`}
+                >
+                  <View style={[styles.detailMarker, { backgroundColor: colors.accentPink, borderColor: colors.surface }]}>
+                    <MapPin size={17} color={colors.textOnAccent} fill={colors.textOnAccent} />
+                  </View>
+                </Marker>
+              </MapView>
+              <Text style={[styles.locationAddress, { color: colors.textMuted }]} numberOfLines={2}>
+                {restaurant.address || 'Position enregistrée'}
+              </Text>
+            </View>
+          ) : null}
+
+          {!imported ? (
+            <>
+              <View style={[styles.listStatus, Shadows.hard, { backgroundColor: colors.surface, borderColor: colors.textPrimary }]}>
+                <ListPlus size={18} color={colors.accent} />
+                <Text style={[styles.listStatusText, { color: colors.textSecondary }]}>{membership.size ? `Dans ${membership.size} liste${membership.size > 1 ? 's' : ''}` : 'Dans aucune liste'}</Text>
+                <Pressable onPress={() => setListModalOpen(true)} style={({ pressed }) => [styles.listManageButton, { opacity: pressed ? 0.58 : 1 }]}>
+                  <Text style={[styles.listManageText, { color: colors.accent }]}>Gérer</Text>
+                  <ChevronRight size={16} color={colors.accent} />
+                </Pressable>
+              </View>
+              <Pressable onPress={remove} style={({ pressed }) => [styles.deleteAction, { borderTopColor: colors.border, opacity: pressed ? 0.55 : 1 }]}>
+                <Trash2 size={18} color={colors.danger} />
+                <Text style={[styles.deleteText, { color: colors.danger }]}>Supprimer l’adresse</Text>
+              </Pressable>
+            </>
+          ) : null}
         </View>
-      </Animated.ScrollView>
+      </ScrollView>
 
-      {/* Full Screen Image Viewer Modal */}
-      <Modal
-        visible={!!selectedImg}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setSelectedImg(null)}
-      >
-        <View style={styles.modalBackground}>
-          <View style={[styles.modalHeader, { paddingTop: insets.top + 10 }]}>
-            <TouchableOpacity
-              onPress={() => setSelectedImg(null)}
-              style={styles.modalCloseBtn}
-            >
-              <BlurView intensity={20} tint="dark" style={styles.closeBlur}>
-                <X size={24} color="#FFF" />
-              </BlurView>
-            </TouchableOpacity>
-          </View>
-
+      <Modal visible={galleryOpen} animationType="fade" onRequestClose={() => setGalleryOpen(false)}>
+        <View style={[styles.galleryRoot, { backgroundColor: colors.background }]}>
           <FlatList
             data={restaurant.images}
             horizontal
             pagingEnabled
+            initialScrollIndex={galleryIndex}
+            getItemLayout={(_, index) => ({ length: width, offset: width * index, index })}
+            keyExtractor={(item, index) => `gallery-${item}-${index}`}
             showsHorizontalScrollIndicator={false}
-            initialScrollIndex={imgIndex}
-            getItemLayout={(_, index) => ({
-              length: width,
-              offset: width * index,
-              index,
-            })}
-            onMomentumScrollEnd={(e) => {
-              const idx = Math.round(e.nativeEvent.contentOffset.x / width);
-              setImgIndex(idx);
-            }}
-            keyExtractor={(item, i) => `modal-${item}-${i}`}
-            renderItem={({ item }) => (
-              <View style={{ width, justifyContent: 'center', alignItems: 'center' }}>
-                <Image
-                  source={{ uri: item }}
-                  style={styles.fullImage}
-                  resizeMode="contain"
-                />
-              </View>
-            )}
-            style={{ flex: 1 }}
+            onMomentumScrollEnd={(event) => setGalleryIndex(Math.round(event.nativeEvent.contentOffset.x / width))}
+            renderItem={({ item }) => <Image source={item} style={{ width, height: '100%' }} contentFit="contain" />}
           />
-
-          <View style={styles.modalFooter} pointerEvents="none">
-            <Text style={styles.modalText}>
-              {imgIndex + 1} / {restaurant?.images?.length || 0}
-            </Text>
+          <View style={[styles.galleryTop, { top: insets.top + Spacing.sm }]}>
+            <View style={styles.galleryCountBubble}>
+              <Text style={styles.galleryCount}>{galleryIndex + 1}/{restaurant.images.length}</Text>
+            </View>
+            <Pressable onPress={() => setGalleryOpen(false)} style={styles.galleryClose} accessibilityLabel="Fermer les photos">
+              <X size={22} color="#FFFFFF" />
+            </Pressable>
           </View>
         </View>
       </Modal>
 
-      <Modal
-        visible={saveModalVisible}
-        transparent
-        animationType="none"
-        onRequestClose={closeSaveModal}
-      >
-        <View style={styles.saveModalBackdrop}> 
-          <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: isDark ? 'rgba(0,0,0,0.85)' : 'rgba(15,23,42,0.4)', opacity: saveModalAnim }]}>
-            <TouchableOpacity
-              style={StyleSheet.absoluteFillObject}
-              activeOpacity={1}
-              onPress={closeSaveModal}
-            />
-          </Animated.View>
-
-          <Animated.View
+      <Modal visible={listModalOpen} transparent={false} presentationStyle="fullScreen" animationType="slide" statusBarTranslucent onRequestClose={() => setListModalOpen(false)}>
+        <View style={[styles.modalRoot, { backgroundColor: colors.background }]}>
+          <View
             style={[
+              styles.listModalSheet,
               {
-                transform: [
-                  {
-                    translateY: saveModalAnim.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [600, 0],
-                    })
-                  }
-                ]
-              }
+                backgroundColor: colors.background,
+                paddingTop: insets.top,
+              },
             ]}
           >
-            <BlurView
-              intensity={isDark ? 50 : 90}
-              tint={isDark ? 'dark' : 'light'}
-              style={[styles.saveModalSheet, { borderColor: colors.borderGlass }]}
+            <View pointerEvents="none" style={StyleSheet.absoluteFillObject}>
+              <View style={[styles.listModalBackdropShape, styles.listModalBackdropPink, { backgroundColor: `${colors.accentPink}18` }]} />
+              <View style={[styles.listModalBackdropShape, styles.listModalBackdropIndigo, { backgroundColor: `${colors.accent}16` }]} />
+              <View style={[styles.listModalBackdropStamp, { borderColor: `${colors.textPrimary}12` }]} />
+            </View>
+
+            <View style={styles.listModalHeader}>
+              <View style={[styles.listModalHeaderIcon, { backgroundColor: `${colors.accentPink}18`, borderColor: colors.textPrimary }]}>
+                <ListPlus size={24} color={colors.accentPink} />
+              </View>
+              <View style={styles.listModalHeaderCopy}>
+                <Text style={[styles.listModalTitle, { color: colors.textPrimary }]}>Ajouter à mes listes</Text>
+                <Text style={[styles.listModalSubtitle, { color: colors.textMuted }]} numberOfLines={2}>
+                  Choisissez où retrouver « {restaurant.name} ».
+                </Text>
+              </View>
+              <Pressable onPress={() => setListModalOpen(false)} accessibilityLabel="Fermer" style={styles.topAction}>
+                <X size={22} color={colors.textPrimary} />
+              </Pressable>
+            </View>
+
+            <ScrollView
+              style={[styles.listModalScroll, { backgroundColor: 'transparent' }]}
+              contentContainerStyle={[styles.listModalContent, { backgroundColor: 'transparent' }]}
+              bounces={false}
+              alwaysBounceVertical={false}
+              contentInsetAdjustmentBehavior="never"
+              automaticallyAdjustContentInsets={false}
+              showsVerticalScrollIndicator={false}
             >
-              <View style={styles.saveModalSheetHandle} />
-              
-              <LinearGradient
-                colors={isDark ? ['rgba(99,102,241,0.25)', 'transparent'] : ['rgba(255, 255, 255, 0.98)', 'rgba(230, 227, 227, 0.6)']}
-                style={styles.saveModalHero}
-              >
-                <View style={[styles.saveModalIconWrap, { backgroundColor: colors.primary + '20' }]}> 
-                  <FolderPlus size={32} color={colors.primary} strokeWidth={2.2} />
-                </View>
-                <View style={{ flex: 1, marginLeft: Spacing.sm }}>
-                  <Text style={[styles.saveModalTitle, { color: isDark ? '#fff' : '#000' }]}>Enregistrer l'adresse</Text>
-                  <Text style={[styles.saveModalSubtitle, { color: colors.textSecondary }]} numberOfLines={1}>
-                    {restaurant.name}
+              <View style={[styles.listModalSummary, Shadows.surface, { backgroundColor: `${colors.accentPink}12`, borderColor: colors.textPrimary }]}>
+                <View style={styles.listModalSummaryCopy}>
+                  <View style={styles.listModalSummaryHeading}>
+                    <Sparkles size={16} color={colors.accentPink} />
+                    <Text style={[styles.listModalSummaryLabel, { color: colors.textPrimary }]}>Sélection actuelle</Text>
+                  </View>
+                  <Text style={[styles.listModalSummaryDetail, { color: colors.textMuted }]}>
+                    {membership.size ? `${membership.size} liste${membership.size !== 1 ? 's' : ''} sélectionnée${membership.size !== 1 ? 's' : ''}` : 'Aucune liste sélectionnée'}
                   </Text>
                 </View>
-              </LinearGradient>
-
-              {collections.length === 0 ? (
-                <View style={[styles.saveEmptyCard, { borderColor: colors.border, backgroundColor: colors.surface + '80' }]}> 
-                  <Text style={[styles.saveEmptyTitle, { color: colors.textPrimary }]}>Aucune collection existante</Text>
-                  <Text style={[styles.saveEmptyText, { color: colors.textSecondary }]}>Creez une collection depuis l'onglet Collections pour commencer a organiser vos endroits favoris.</Text>
+                <View style={[styles.listModalCount, { backgroundColor: membership.size ? colors.accentPink : colors.surface, borderColor: colors.textPrimary }]}>
+                  <Text style={[styles.listModalCountText, { color: membership.size ? colors.textOnAccent : colors.accentPink }]}>{membership.size}</Text>
                 </View>
-              ) : (
-                <FlatList
-                  data={collections}
-                  keyExtractor={(item) => item.id}
-                  showsVerticalScrollIndicator={false}
-                  contentContainerStyle={styles.saveList}
-                  renderItem={({ item }) => {
-                    const alreadySaved = item.restaurantIds.includes(restaurant.id);
-                    const isSaving = savingCollectionId === item.id;
-                    return (
-                      <TouchableOpacity
-                        activeOpacity={0.8}
-                        style={[
-                          styles.saveCollectionItem,
-                          {
-                            backgroundColor: alreadySaved ? (isDark ? colors.surfaceLight : '#fff') : colors.surface,
-                            borderColor: alreadySaved ? colors.primary + '40' : colors.border,
-                            transform: [{ scale: isSaving ? 0.98 : 1 }]
-                          },
-                          Shadows.sm,
-                        ]}
-                        onPress={() => handleSelectCollection(item)}
-                        disabled={isSaving || alreadySaved}
-                      >
-                        <View style={[styles.saveCollectionDot, { backgroundColor: alreadySaved ? colors.primary : colors.surfaceLight }]}> 
-                          {alreadySaved ? (
-                            <Check size={14} color={colors.textOnPrimary} strokeWidth={3} />
-                          ) : (
-                            <Folder size={14} color={colors.textSecondary} strokeWidth={2} />
-                          )}
-                        </View>
+              </View>
 
-                        <View style={{ flex: 1 }}>
-                          <Text style={[styles.saveCollectionName, { color: colors.textPrimary }]}>{item.name}</Text>
-                          <Text style={[styles.saveCollectionMeta, { color: colors.textSecondary }]}>
-                            {item.restaurantIds.length} adresse{item.restaurantIds.length > 1 ? 's' : ''}
-                          </Text>
-                        </View>
-
-                        <View style={[
-                          styles.saveCollectionAction, 
-                          { backgroundColor: alreadySaved ? 'transparent' : colors.primary + '15' }
-                        ]}> 
-                          {alreadySaved ? (
-                            <Check size={20} color={colors.primary} />
-                          ) : (
-                            <Text style={[styles.saveCollectionActionText, { color: colors.primary }]}>
-                              {isSaving ? 'Ajout...' : 'Ajouter'}
-                            </Text>
-                          )}
-                        </View>
-                      </TouchableOpacity>
-                    );
-                  }}
-                  style={{ maxHeight: 340 }}
-                />
+              {collections.length ? collections.map((collection) => {
+                const selected = membership.has(collection.id);
+                const CollectionIcon = getCollectionIcon(collection.emoji);
+                return (
+                  <Pressable
+                    key={collection.id}
+                    onPress={() => toggleCollection(collection)}
+                    accessibilityRole="checkbox"
+                    accessibilityState={{ checked: selected }}
+                    accessibilityLabel={`${selected ? 'Retirer de' : 'Ajouter à'} ${collection.name}`}
+                    style={({ pressed }) => [
+                      styles.collectionRow,
+                      Shadows.surface,
+                      {
+                        backgroundColor: selected ? `${colors.accent}16` : colors.surface,
+                        borderColor: selected ? colors.accent : colors.textPrimary,
+                        opacity: pressed ? 0.62 : 1,
+                      },
+                    ]}
+                  >
+                    <View style={[styles.collectionIcon, { backgroundColor: selected ? `${colors.accent}12` : colors.surfaceLight, borderColor: selected ? colors.accent : colors.textPrimary }]}>
+                      <CollectionIcon size={20} color={selected ? colors.accent : colors.textSecondary} />
+                    </View>
+                    <View style={styles.collectionCopy}>
+                      <Text style={[styles.collectionName, { color: selected ? colors.accent : colors.textPrimary }]}>{collection.name}</Text>
+                      <Text style={[styles.collectionMeta, { color: colors.textMuted }]}>
+                        {collection.restaurantIds.length} adresse{collection.restaurantIds.length !== 1 ? 's' : ''}
+                      </Text>
+                    </View>
+                    <View style={[styles.checkbox, { borderColor: selected ? colors.accent : colors.textPrimary, backgroundColor: selected ? colors.accent : colors.surface }]}>
+                      {selected ? <Check size={15} color={colors.textOnAccent} strokeWidth={3} /> : null}
+                    </View>
+                  </Pressable>
+                );
+              }) : (
+                <View style={[styles.noListsPanel, Shadows.surface, { backgroundColor: colors.surface, borderColor: colors.textPrimary }]}>
+                  <ListPlus size={22} color={colors.accent} />
+                  <Text style={[styles.noListsTitle, { color: colors.textPrimary }]}>Aucune liste personnelle</Text>
+                  <Text style={[styles.noLists, { color: colors.textMuted }]}>Créez d’abord une liste depuis l’onglet Listes.</Text>
+                </View>
               )}
 
-              <TouchableOpacity
-                onPress={closeSaveModal}
-                activeOpacity={0.85}
-                style={[styles.saveCloseBtn, { backgroundColor: isDark ? colors.surfaceLight : colors.surface, borderColor: colors.border }]}
+            </ScrollView>
+            <View style={[styles.listModalFooter, { backgroundColor: colors.background, paddingBottom: insets.bottom + Spacing.md }]}>
+              <View style={styles.listModalFooterHintRow}>
+                <Check size={15} color={colors.accentPink} strokeWidth={3} />
+                <Text style={[styles.listModalFooterHint, { color: colors.textMuted }]}>Enregistré automatiquement</Text>
+              </View>
+              <Pressable
+                onPress={() => setListModalOpen(false)}
+                accessibilityRole="button"
+                style={({ pressed }) => [styles.listModalDone, Shadows.hard, { backgroundColor: colors.accent, borderColor: colors.textPrimary, opacity: pressed ? 0.72 : 1 }]}
               >
-                <Text style={[styles.saveCloseText, { color: colors.textPrimary }]}>Fermer</Text>
-              </TouchableOpacity>
-            </BlurView>
-          </Animated.View>
+                <Text style={[styles.listModalDoneText, { color: colors.textOnAccent }]}>Terminé</Text>
+              </Pressable>
+            </View>
+          </View>
+          <View
+            pointerEvents="none"
+            style={[
+              styles.bottomSafeAreaFill,
+              { height: insets.bottom + 2, backgroundColor: colors.background },
+            ]}
+          />
         </View>
       </Modal>
+
+      <VisitFormModal
+        visible={visitModalOpen}
+        placeId={restaurant.placeId || restaurant.id}
+        visit={editingVisit}
+        onClose={() => setVisitModalOpen(false)}
+      />
     </View>
   );
+
+  function SummaryMetric({ icon: Icon, label, value, color }: { icon: any; label: string; value: string; color: string }) {
+    return (
+      <View style={styles.summaryMetric}>
+        <Icon size={16} color={color} />
+        <Text style={[styles.summaryLabel, { color: colors.textMuted }]}>{label}</Text>
+        <Text style={[styles.summaryValue, { color: colors.textPrimary }]} numberOfLines={1}>{value}</Text>
+      </View>
+    );
+  }
+
+  function VisitEntry({ visit }: { visit: Visit }) {
+    return (
+      <View style={[
+        styles.visitEntry,
+        {
+          backgroundColor: colors.surfaceLight,
+        },
+      ]}>
+        <View style={[styles.timelineDot, { backgroundColor: colors.accentPink, borderColor: colors.background }]} />
+        <View style={styles.visitHeading}>
+          <View style={styles.visitHeadingCopy}>
+            <Text style={[styles.visitDate, { color: colors.textPrimary }]}>{formatVisitDate(visit.visitedAt)}</Text>
+            {visit.dateIsEstimated ? <Text style={[styles.estimatedDate, { color: colors.textMuted }]}>Date approximative</Text> : null}
+          </View>
+          <View style={styles.visitActions}>
+            <Pressable
+              onPress={() => openVisit(visit)}
+              accessibilityRole="button"
+              accessibilityLabel={`Modifier la visite du ${formatVisitDate(visit.visitedAt)}`}
+              style={({ pressed }) => [styles.visitIconButton, { opacity: pressed ? 0.5 : 1 }]}
+            >
+              <Pencil size={17} color={colors.accent} />
+            </Pressable>
+            <Pressable
+              onPress={() => removeVisit(visit)}
+              accessibilityRole="button"
+              accessibilityLabel={`Supprimer la visite du ${formatVisitDate(visit.visitedAt)}`}
+              style={({ pressed }) => [styles.visitIconButton, { opacity: pressed ? 0.5 : 1 }]}
+            >
+              <Trash2 size={17} color={colors.danger} />
+            </Pressable>
+          </View>
+        </View>
+
+        <View style={styles.visitMetaRow}>
+          {visit.rating != null ? (
+            <View style={styles.visitMeta}>
+              <Star size={15} color={colors.accentYellow} fill={colors.accentYellow} />
+              <Text style={[styles.visitMetaText, { color: colors.textSecondary }]}>{visit.rating}/5</Text>
+            </View>
+          ) : null}
+          {visit.wouldReturn != null ? (
+            <View style={styles.visitMeta}>
+              <Heart size={15} color={visit.wouldReturn ? colors.accentGreen : colors.textMuted} />
+              <Text style={[styles.visitMetaText, { color: colors.textSecondary }]}>
+                {visit.wouldReturn ? 'J’y retournerais' : 'Je n’y retournerais pas'}
+              </Text>
+            </View>
+          ) : null}
+          {visit.amount != null ? (
+            <View style={styles.visitMeta}>
+              <Star size={15} color={colors.accentYellow} fill={colors.accentYellow} />
+              <Text style={[styles.visitMetaText, { color: colors.textSecondary }]}>{formatAmount(visit.amount)}</Text>
+            </View>
+          ) : null}
+        </View>
+
+        {visit.dishes.length ? (
+          <Text style={[styles.visitDetail, { color: colors.textSecondary }]}>
+            <Text style={[styles.visitDetailLabel, { color: colors.textPrimary }]}>Plats · </Text>{visit.dishes.join(', ')}
+          </Text>
+        ) : null}
+        {visit.companions ? (
+          <Text style={[styles.visitDetail, { color: colors.textSecondary }]}>
+            <Text style={[styles.visitDetailLabel, { color: colors.textPrimary }]}>Avec · </Text>{visit.companions}
+          </Text>
+        ) : null}
+        {visit.notes ? <Text style={[styles.visitNotes, { color: colors.textSecondary }]}>{visit.notes}</Text> : null}
+        {visit.imageUris.length ? (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.visitPhotos}>
+            {visit.imageUris.map((uri) => <Image key={uri} source={{ uri }} style={styles.visitPhoto} />)}
+          </ScrollView>
+        ) : null}
+      </View>
+    );
+  }
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  navHeader: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    zIndex: 100,
-    paddingHorizontal: Spacing.xl,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  backButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
-  },
-  notFound: {
-    fontSize: FontSize.lg,
-    fontFamily: FontFamily.medium,
-    textAlign: 'center',
-  },
-  heroContainer: {
-    height: HEADER_HEIGHT,
-    width: '100%',
-  },
-  heroGradient: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  dots: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    position: 'absolute',
-    bottom: Spacing.lg,
-    left: 0,
-    right: 0,
-  },
-  dot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: 'rgba(255,255,255,0.3)',
-    marginHorizontal: 4,
-  },
-  dotActive: {
-    backgroundColor: '#fff',
-    width: 20,
-  },
-  heroMetaCard: {
-    position: 'absolute',
-    left: Spacing.xl,
-    right: Spacing.xl,
-    bottom: Spacing.xxxl + 20,
-    overflow: 'hidden',
-  },
-  heroMetaTopRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: Spacing.sm,
-  },
-  heroCatPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: BorderRadius.full,
-    borderWidth: 1,
+  screen: { flex: 1 },
+  topBar: { minHeight: 54, paddingHorizontal: Spacing.sm, paddingBottom: 5, flexDirection: 'row', alignItems: 'flex-end', borderBottomWidth: 0 },
+  topAction: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  topTitle: { flex: 1, paddingBottom: 12, fontFamily: FontFamily.semiBold, fontSize: FontSize.md, textAlign: 'center' },
+  hero: { position: 'relative' },
+  heroImage: { height: 260 },
+  artwork: { width: '100%', height: 260, borderWidth: 0, borderRadius: 0 },
+  photoCounter: { position: 'absolute', right: Spacing.md, bottom: Spacing.md, minWidth: 42, minHeight: 28, paddingHorizontal: Spacing.sm, alignItems: 'center', justifyContent: 'center', borderRadius: BorderRadius.full },
+  photoCounterText: { color: '#FFFFFF', fontFamily: FontFamily.semiBold, fontSize: FontSize.xs },
+  content: { paddingHorizontal: Spacing.lg, paddingTop: Spacing.lg },
+  sourceRow: { minHeight: 64, marginBottom: Spacing.lg, padding: Spacing.md, flexDirection: 'row', alignItems: 'center', gap: Spacing.md, borderWidth: 1.5, borderRadius: 12 },
+  sourceIcon: { width: 38, height: 38, alignItems: 'center', justifyContent: 'center', borderRadius: BorderRadius.md },
+  sourceTitle: { fontFamily: FontFamily.semiBold, fontSize: FontSize.sm },
+  sourceDetail: { marginTop: 2, fontFamily: FontFamily.regular, fontSize: FontSize.xs },
+  categoryLine: { flexDirection: 'row', alignItems: 'center', gap: 7 },
+  categoryText: { fontFamily: FontFamily.medium, fontSize: FontSize.sm },
+  locationLabel: { marginLeft: 'auto', fontFamily: FontFamily.medium, fontSize: FontSize.xs },
+  title: { marginTop: Spacing.sm, fontFamily: FontFamily.semiBold, fontSize: FontSize.xxl, lineHeight: 34, letterSpacing: -0.8 },
+  addressLine: { marginTop: Spacing.md, flexDirection: 'row', alignItems: 'flex-start', gap: 7 },
+  address: { flex: 1, fontFamily: FontFamily.regular, fontSize: FontSize.sm, lineHeight: 21 },
+  actionRow: { marginTop: Spacing.xl, flexDirection: 'row', gap: Spacing.sm },
+  routeAction: { minHeight: 44, paddingHorizontal: Spacing.lg, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, borderRadius: BorderRadius.md },
+  routeActionText: { fontFamily: FontFamily.semiBold, fontSize: FontSize.sm },
+  secondaryAction: { minHeight: 44, paddingHorizontal: Spacing.lg, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, borderWidth: 1, borderRadius: BorderRadius.md },
+  secondaryActionText: { fontFamily: FontFamily.semiBold, fontSize: FontSize.sm },
+  summary: { marginTop: Spacing.xl, padding: Spacing.md, flexDirection: 'row', borderWidth: 1.5, borderRadius: 12 },
+  summaryMetric: { flex: 1, minWidth: 0, alignItems: 'center', gap: 4 },
+  summaryLabel: { fontFamily: FontFamily.regular, fontSize: FontSize.xs },
+  summaryValue: { maxWidth: '100%', fontFamily: FontFamily.semiBold, fontSize: FontSize.sm },
+  section: { marginTop: Spacing.xxl, padding: Spacing.lg, borderWidth: 1.5, borderRadius: 12 },
+  sectionSubsection: { marginTop: Spacing.xl },
+  sectionTitle: { marginBottom: Spacing.sm, fontFamily: FontFamily.semiBold, fontSize: FontSize.lg },
+  body: { fontFamily: FontFamily.regular, fontSize: FontSize.md, lineHeight: 24 },
+  journalSection: { marginTop: Spacing.xxxl, padding: Spacing.lg, borderWidth: 1.5, borderRadius: 12 },
+  journalHeader: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: Spacing.md },
+  journalHeaderCopy: { flex: 1, minWidth: 120 },
+  journalTitle: { marginBottom: 0 },
+  privateLine: { marginTop: 4, flexDirection: 'row', alignItems: 'center', gap: 6 },
+  privateText: { fontFamily: FontFamily.regular, fontSize: FontSize.xs },
+  addVisitButton: {
+    minHeight: 44,
     paddingHorizontal: Spacing.md,
-    paddingVertical: 6,
-  },
-  heroCatText: {
-    color: '#FFF',
-    fontSize: FontSize.xs,
-    fontFamily: FontFamily.bold,
-  },
-  heroPhotoCount: {
+    paddingVertical: Spacing.sm,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    gap: 7,
+    borderRadius: BorderRadius.md,
+  },
+  addVisitText: { fontFamily: FontFamily.semiBold, fontSize: FontSize.sm, textAlign: 'center' },
+  rememberedRow: {
+    marginTop: Spacing.xl,
+    padding: Spacing.md,
+    borderRadius: BorderRadius.lg,
+    ...Shadows.hairline,
+  },
+  rememberedLabel: { fontFamily: FontFamily.semiBold, fontSize: FontSize.sm },
+  rememberedText: { marginTop: 5, fontFamily: FontFamily.regular, fontSize: FontSize.sm, lineHeight: 21 },
+  timeline: { marginTop: Spacing.xl, gap: Spacing.sm },
+  visitEntry: {
+    position: 'relative',
+    minHeight: 72,
+    padding: Spacing.md,
+    paddingLeft: Spacing.lg,
+    borderRadius: BorderRadius.lg,
+    ...Shadows.hairline,
+  },
+  timelineDot: {
+    position: 'absolute',
+    top: 20,
+    left: 8,
+    width: 9,
+    height: 9,
+    borderWidth: 2,
     borderRadius: BorderRadius.full,
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 6,
-    backgroundColor: 'rgba(15,23,42,0.36)',
   },
-  heroPhotoText: {
-    color: '#FFF',
-    fontSize: FontSize.xs,
-    fontFamily: FontFamily.semiBold,
+  visitHeading: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.sm },
+  visitHeadingCopy: { flex: 1, minHeight: 44, justifyContent: 'center' },
+  visitDate: { fontFamily: FontFamily.semiBold, fontSize: FontSize.md, lineHeight: 22 },
+  estimatedDate: { marginTop: 2, fontFamily: FontFamily.regular, fontSize: FontSize.xs },
+  visitActions: { flexDirection: 'row' },
+  visitIconButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  visitMetaRow: { marginTop: 2, flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.md },
+  visitMeta: { minHeight: 24, flexDirection: 'row', alignItems: 'center', gap: 5 },
+  visitMetaText: { fontFamily: FontFamily.medium, fontSize: FontSize.xs },
+  visitDetail: { marginTop: Spacing.sm, fontFamily: FontFamily.regular, fontSize: FontSize.sm, lineHeight: 21 },
+  visitDetailLabel: { fontFamily: FontFamily.semiBold },
+  visitNotes: { marginTop: Spacing.sm, fontFamily: FontFamily.regular, fontSize: FontSize.sm, lineHeight: 22 },
+  visitPhotos: { marginTop: Spacing.md, gap: Spacing.sm },
+  visitPhoto: { width: 104, height: 78, borderRadius: BorderRadius.md },
+  emptyJournal: {
+    marginTop: Spacing.xl,
+    padding: Spacing.lg,
+    borderRadius: BorderRadius.lg,
   },
-  heroName: {
-    color: '#FFF',
-    fontSize: FontSize.xxl,
-    fontFamily: FontFamily.bold,
-    lineHeight: 30,
-    marginBottom: 2,
-    textShadowColor: 'rgba(0,0,0,0.35)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 6,
+  emptyJournalTitle: { fontFamily: FontFamily.semiBold, fontSize: FontSize.md },
+  emptyJournalText: { marginTop: 5, fontFamily: FontFamily.regular, fontSize: FontSize.sm, lineHeight: 21 },
+  locationSection: { marginTop: Spacing.xxxl, padding: Spacing.lg, borderWidth: 1.5, borderRadius: 12 },
+  locationHeader: { minHeight: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: Spacing.md },
+  locationHeaderCopy: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
+  locationTitle: { fontFamily: FontFamily.semiBold, fontSize: FontSize.md },
+  locationAction: { minHeight: 44, paddingHorizontal: Spacing.sm, flexDirection: 'row', alignItems: 'center', gap: 4 },
+  locationActionText: { fontFamily: FontFamily.semiBold, fontSize: FontSize.xs },
+  detailMap: { width: '100%', height: 148, marginTop: Spacing.md, borderRadius: 10, overflow: 'hidden' },
+  detailMarker: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center', borderWidth: 3, borderRadius: 18 },
+  locationAddress: { marginTop: Spacing.sm, fontFamily: FontFamily.regular, fontSize: FontSize.xs, lineHeight: 18 },
+  listStatus: { minHeight: 64, marginTop: Spacing.xxxl, padding: Spacing.md, flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, borderWidth: 1.5, borderRadius: 12 },
+  listStatusText: { flex: 1, fontFamily: FontFamily.medium, fontSize: FontSize.sm },
+  listManageButton: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 2 },
+  listManageText: { fontFamily: FontFamily.semiBold, fontSize: FontSize.sm },
+  deleteAction: { minHeight: 52, marginTop: Spacing.xxl, paddingHorizontal: Spacing.xs, flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
+  deleteText: { fontFamily: FontFamily.semiBold, fontSize: FontSize.sm },
+  modalRoot: { flex: 1 },
+  bottomSafeAreaFill: {
+    position: 'absolute',
+    right: 0,
+    bottom: 0,
+    left: 0,
+    zIndex: 20,
   },
-  heroPrice: {
-    color: 'rgba(255,255,255,0.92)',
-    fontSize: FontSize.sm,
-    fontFamily: FontFamily.semiBold,
-  },
-  content: {
+  listModalSheet: {
     flex: 1,
+    width: '100%',
+    overflow: 'hidden',
+  },
+  listModalBackdropShape: { position: 'absolute', overflow: 'hidden' },
+  listModalBackdropPink: {
+    top: 174,
+    right: -118,
+    width: 252,
+    height: 252,
+    borderRadius: 28,
+    transform: [{ rotate: '14deg' }],
+  },
+  listModalBackdropIndigo: {
+    bottom: 104,
+    left: -104,
+    width: 190,
+    height: 190,
+    borderRadius: 24,
+    transform: [{ rotate: '-18deg' }],
+  },
+  listModalBackdropStamp: {
+    position: 'absolute',
+    top: 360,
+    right: 28,
+    width: 74,
+    height: 74,
+    borderWidth: 2,
+    borderRadius: 18,
+    transform: [{ rotate: '-12deg' }],
+  },
+  listModalHeader: {
+    minHeight: 108,
     paddingHorizontal: Spacing.xl,
     paddingTop: Spacing.lg,
-    paddingBottom: 60,
-    marginTop: -Spacing.xxxl, // Overlap the header slightly
-    borderTopLeftRadius: BorderRadius.xxl * 1.5,
-    borderTopRightRadius: BorderRadius.xxl * 1.5,
-  },
-  grabHandle: {
-    width: 46,
-    height: 5,
-    borderRadius: BorderRadius.full,
-    alignSelf: 'center',
-    marginBottom: Spacing.lg,
-    opacity: 0.8,
-  },
-  headerInfo: {
-    marginBottom: Spacing.lg,
+    paddingBottom: Spacing.lg,
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: Spacing.md,
   },
-  overviewCard: {
-    borderWidth: 1,
-    borderRadius: BorderRadius.xxl,
-    padding: Spacing.lg,
-    marginBottom: Spacing.lg,
-  },
-  eyebrow: {
-    fontSize: 11,
-    fontFamily: FontFamily.bold,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-    marginBottom: 4,
-  },
-  name: {
-    fontSize: FontSize.xl,
-    fontFamily: FontFamily.bold,
-    lineHeight: 26,
-  },
-  badge: {
-    alignSelf: 'flex-start',
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.xs + 2,
-    borderRadius: BorderRadius.full,
-    borderWidth: 1,
-  },
-  badgeText: {
-    fontSize: FontSize.sm,
-    fontFamily: FontFamily.bold,
-  },
-  infoBlocks: {
-    gap: Spacing.sm,
-  },
-  infoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  infoCard: {
-    borderWidth: 1,
-    borderRadius: BorderRadius.xl,
-    padding: Spacing.md,
-  },
-  iconBox: {
-    width: 44,
-    height: 44,
-    borderRadius: BorderRadius.xl,
+  listModalHeaderIcon: {
+    width: 52,
+    height: 52,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: Spacing.md,
+    borderWidth: 1.5,
+    borderRadius: 12,
   },
-  infoText: {
-    fontSize: FontSize.sm,
-    fontFamily: FontFamily.medium,
-    flex: 1,
-    lineHeight: 20,
-  },
-  infoLabel: {
-    fontSize: 11,
-    fontFamily: FontFamily.bold,
-    textTransform: 'uppercase',
-    letterSpacing: 0.7,
-    marginBottom: 2,
-  },
-  descSection: {
-    padding: Spacing.xl,
-    borderRadius: BorderRadius.xxl,
-    borderWidth: 1,
-    marginBottom: Spacing.lg,
-  },
-  journalSection: {
-    padding: Spacing.xl,
-    borderRadius: BorderRadius.xxl,
-    borderWidth: 1,
-    marginBottom: Spacing.lg,
-  },
-  journalHeader: {
+  listModalHeaderCopy: { flex: 1, minWidth: 0 },
+  listModalTitle: { fontFamily: FontFamily.semiBold, fontSize: FontSize.xl, lineHeight: 29 },
+  listModalSubtitle: { marginTop: 4, fontFamily: FontFamily.regular, fontSize: FontSize.xs, lineHeight: 18 },
+  listModalScroll: { flex: 1 },
+  listModalContent: { flexGrow: 1, paddingHorizontal: Spacing.xl, paddingTop: Spacing.lg, paddingBottom: Spacing.xl },
+  listModalSummary: {
+    minHeight: 68,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.md,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: Spacing.md,
+    borderWidth: 1.5,
+    borderRadius: 14,
   },
-  returnPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: BorderRadius.full,
+  listModalSummaryCopy: { flex: 1, minWidth: 0 },
+  listModalSummaryHeading: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
+  listModalSummaryLabel: { fontFamily: FontFamily.semiBold, fontSize: FontSize.sm },
+  listModalSummaryDetail: { marginTop: 4, fontFamily: FontFamily.regular, fontSize: FontSize.xs },
+  listModalCount: {
+    minWidth: 40,
+    height: 40,
     paddingHorizontal: Spacing.sm,
-    paddingVertical: 5,
-    gap: 5,
-  },
-  returnPillText: {
-    fontSize: FontSize.xs,
-    fontFamily: FontFamily.bold,
-  },
-  journalGrid: {
-    flexDirection: 'row',
-    gap: Spacing.sm,
-    marginBottom: Spacing.sm,
-  },
-  journalTile: {
-    width: 96,
-    borderWidth: 1,
-    borderRadius: BorderRadius.xl,
-    padding: Spacing.md,
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1.5,
+    borderRadius: 12,
   },
-  journalTileWide: {
-    flex: 1,
-    borderWidth: 1,
-    borderRadius: BorderRadius.xl,
-    padding: Spacing.md,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm,
-  },
-  journalValue: {
-    marginTop: Spacing.xs,
-    fontSize: FontSize.lg,
-    fontFamily: FontFamily.bold,
-  },
-  journalValueSmall: {
-    fontSize: FontSize.md,
-    fontFamily: FontFamily.bold,
-  },
-  journalLabel: {
-    marginTop: 2,
-    fontSize: FontSize.xs,
-    fontFamily: FontFamily.semiBold,
-  },
-  signatureBox: {
-    borderWidth: 1,
-    borderRadius: BorderRadius.xl,
-    padding: Spacing.md,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm,
-    marginTop: Spacing.xs,
-  },
-  signatureText: {
-    flex: 1,
-    fontSize: FontSize.sm,
-    fontFamily: FontFamily.bold,
-  },
-  tagsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Spacing.sm,
+  listModalCountText: { fontFamily: FontFamily.bold, fontSize: FontSize.sm },
+  collectionRow: {
+    minHeight: 84,
     marginTop: Spacing.md,
-  },
-  tagPill: {
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: BorderRadius.full,
-    borderWidth: 1,
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 5,
-    gap: 4,
-  },
-  tagText: {
-    fontSize: FontSize.xs,
-    fontFamily: FontFamily.bold,
-  },
-  sectionTitle: {
-    fontSize: FontSize.lg,
-    fontFamily: FontFamily.bold,
-    marginBottom: Spacing.md,
-    letterSpacing: -0.5,
-  },
-  description: {
-    fontSize: FontSize.md,
-    fontFamily: FontFamily.regular,
-    lineHeight: 24,
-  },
-  actionsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
     gap: Spacing.md,
-    marginBottom: Spacing.xxxl,
+    borderWidth: 1.5,
+    borderRadius: 14,
   },
-  actionBtn: {
-    width: (width - Spacing.xl * 2 - Spacing.md) / 2,
-    alignItems: 'center',
-    padding: Spacing.lg,
-    borderRadius: BorderRadius.xxl,
-    borderWidth: 1,
-    borderColor: 'rgba(148,163,184,0.14)',
-  },
-  actionIconBox: {
-    width: 48,
-    height: 48,
-    borderRadius: BorderRadius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: Spacing.sm,
-  },
-  actionText: {
-    fontSize: FontSize.sm,
-    fontFamily: FontFamily.semiBold,
-  },
-  actionBtnWide: {
-    width: '100%',
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: Spacing.lg,
-    borderRadius: BorderRadius.xxl,
-    borderWidth: 1,
-    gap: Spacing.md,
-  },
-  actionSubText: {
-    marginTop: 2,
-    fontSize: FontSize.xs,
-    fontFamily: FontFamily.medium,
-  },
-  modalBackground: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.95)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  modalHeader: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    paddingHorizontal: Spacing.xl,
-    zIndex: 10,
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-  },
-  modalCloseBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    overflow: 'hidden',
-  },
-  closeBlur: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  fullImage: {
-    width: '100%',
-    height: '80%',
-  },
-  modalFooter: {
-    position: 'absolute',
-    bottom: 40,
-    left: 0,
-    right: 0,
-    alignItems: 'center',
-  },
-  modalText: {
-    color: '#FFF',
-    fontSize: FontSize.md,
-    fontFamily: FontFamily.medium,
-    opacity: 0.8,
-  },
-  saveModalBackdrop: {
-    flex: 1,
-    justifyContent: 'flex-end',
-  },
-  saveModalSheet: {
-    borderTopLeftRadius: BorderRadius.xxl * 1.2,
-    borderTopRightRadius: BorderRadius.xxl * 1.2,
-    borderWidth: 1,
-    borderBottomWidth: 0,
-    overflow: 'hidden',
-    padding: Spacing.xl,
-    paddingTop: Spacing.md,
-    paddingBottom: Spacing.xxl + 20,
-  },
-  saveModalSheetHandle: {
-    width: 40,
-    height: 5,
-    borderRadius: BorderRadius.full,
-    backgroundColor: 'rgba(150,150,150,0.3)',
-    alignSelf: 'center',
-    marginBottom: Spacing.lg,
-  },
-  saveModalHero: {
-    borderRadius: BorderRadius.xl,
-    padding: Spacing.lg,
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: Spacing.xl,
-  },
-  saveModalIconWrap: {
-    width: 60,
-    height: 60,
-    borderRadius: BorderRadius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  saveModalTitle: {
-    fontSize: FontSize.xl,
-    fontFamily: FontFamily.bold,
-    letterSpacing: -0.5,
-  },
-  saveModalSubtitle: {
-    marginTop: 4,
-    fontSize: FontSize.md,
-    fontFamily: FontFamily.medium,
-  },
-  saveModalMetaRow: {
-    flexDirection: 'row',
-    gap: Spacing.sm,
-    marginBottom: Spacing.md,
-  },
-  savePill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: BorderRadius.full,
-    borderWidth: 1,
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 5,
-  },
-  savePillText: {
-    fontSize: FontSize.xs,
-    fontFamily: FontFamily.semiBold,
-  },
-  saveList: {
-    gap: Spacing.sm,
-  },
-  saveCollectionItem: {
-    borderWidth: 1,
-    borderRadius: BorderRadius.xl,
-    padding: Spacing.md,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  saveCollectionDot: {
-    width: 30,
-    height: 30,
-    borderRadius: BorderRadius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: Spacing.sm,
-  },
-  saveCollectionName: {
-    fontSize: FontSize.md,
-    fontFamily: FontFamily.semiBold,
-  },
-  saveCollectionMeta: {
-    marginTop: 2,
-    fontSize: FontSize.xs,
-    fontFamily: FontFamily.medium,
-  },
-  saveCollectionAction: {
-    borderRadius: BorderRadius.full,
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 5,
-    marginLeft: Spacing.sm,
-  },
-  saveCollectionActionText: {
-    fontSize: FontSize.xs,
-    fontFamily: FontFamily.bold,
-  },
-  saveEmptyCard: {
-    borderWidth: 1,
-    borderRadius: BorderRadius.xl,
-    padding: Spacing.lg,
-    marginBottom: Spacing.md,
-  },
-  saveEmptyTitle: {
-    fontSize: FontSize.md,
-    fontFamily: FontFamily.bold,
-    marginBottom: 4,
-  },
-  saveEmptyText: {
-    fontSize: FontSize.sm,
-    fontFamily: FontFamily.medium,
-    lineHeight: 20,
-  },
-  saveCloseBtn: {
-    marginTop: Spacing.md,
-    borderRadius: BorderRadius.full,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: Spacing.md,
-  },
-  saveCloseText: {
-    fontSize: FontSize.sm,
-    fontFamily: FontFamily.bold,
-  },
+  collectionIcon: { width: 52, height: 52, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderRadius: 12 },
+  collectionCopy: { flex: 1, minWidth: 0 },
+  collectionName: { fontFamily: FontFamily.semiBold, fontSize: FontSize.lg },
+  collectionMeta: { marginTop: 2, fontFamily: FontFamily.regular, fontSize: FontSize.xs },
+  checkbox: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderRadius: 10 },
+  noListsPanel: { marginTop: Spacing.lg, padding: Spacing.xl, alignItems: 'center', borderWidth: 1.5, borderRadius: 12 },
+  noListsTitle: { marginTop: Spacing.sm, fontFamily: FontFamily.semiBold, fontSize: FontSize.md },
+  noLists: { marginTop: 4, fontFamily: FontFamily.regular, fontSize: FontSize.sm, lineHeight: 21, textAlign: 'center' },
+  listModalFooter: { paddingTop: Spacing.md, paddingHorizontal: Spacing.xl },
+  listModalFooterHintRow: { minHeight: 36, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Spacing.sm },
+  listModalFooterHint: { fontFamily: FontFamily.regular, fontSize: FontSize.xs, textAlign: 'center' },
+  listModalDone: { minHeight: 56, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderRadius: 12 },
+  listModalDoneText: { fontFamily: FontFamily.semiBold, fontSize: FontSize.md },
+  galleryRoot: { flex: 1, justifyContent: 'center' },
+  galleryTop: { position: 'absolute', left: Spacing.lg, right: Spacing.lg, flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
+  galleryCountBubble: { minWidth: 52, height: 32, paddingHorizontal: Spacing.md, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.48)', borderRadius: BorderRadius.full },
+  galleryCount: { color: '#FFFFFF', fontFamily: FontFamily.semiBold, fontSize: FontSize.xs, textAlign: 'center' },
+  galleryClose: { position: 'absolute', right: 0, width: 44, height: 44, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.48)', borderRadius: BorderRadius.full },
 });
