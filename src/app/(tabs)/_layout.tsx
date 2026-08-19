@@ -14,13 +14,13 @@ export default function TabsLayout() {
     <NativeTabs
       backgroundColor={isIOS ? null : colors.surface}
       blurEffect={isIOS ? (isDark ? 'systemMaterialDark' : 'systemMaterialLight') : undefined}
-      tintColor={colors.primary}
-      iconColor={{ default: colors.textMuted, selected: colors.primary }}
+      tintColor={isDark ? colors.lavender : colors.primary}
+      iconColor={{ default: colors.textMuted, selected: isDark ? colors.lavender : colors.primary }}
       indicatorColor={colors.surfaceLight}
       disableTransparentOnScrollEdge={false}
       labelStyle={{
         default: { color: colors.textMuted, fontFamily: FontFamily.semiBold, fontSize: 11 },
-        selected: { color: colors.primary, fontFamily: FontFamily.semiBold, fontSize: 11, fontWeight: '700' },
+        selected: { color: isDark ? colors.lavender : colors.primary, fontFamily: FontFamily.semiBold, fontSize: 11, fontWeight: '700' },
       }}
     >
       <NativeTabs.Trigger name="restaurants">

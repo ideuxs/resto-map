@@ -13,6 +13,7 @@ import {
 import { Image } from 'expo-image';
 import MapView, { Marker } from 'react-native-maps';
 import * as Linking from 'expo-linking';
+import * as Haptics from 'expo-haptics';
 import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
@@ -25,12 +26,15 @@ import {
   LockKeyhole,
   MapPin,
   Navigation2,
+  NotebookPen,
   Pencil,
   Plus,
   Sparkles,
   Star,
   Trash2,
   UsersRound,
+  Utensils,
+  WalletCards,
   X,
 } from '../components/FlaticonIcon';
 
@@ -55,7 +59,6 @@ import VisitFormModal from '../components/VisitFormModal';
 import { useTheme } from '../theme/ThemeProvider';
 import { BorderRadius, FontFamily, FontSize, getSourceColor, isSourceColorKey, Shadows, sourceColorKeyFor, Spacing } from '../constants/theme';
 import { priceBandLabel } from '../domain/priceBands';
-import { Utensils } from '../components/FlaticonIcon';
 
 type Props = { route: any; navigation: any };
 
@@ -68,12 +71,12 @@ function formatAmount(value: number) {
 }
 
 const MINI_MAP_DARK_STYLE = [
-  { elementType: 'geometry', stylers: [{ color: '#17121E' }] },
-  { elementType: 'labels.text.fill', stylers: [{ color: '#C9A5DF' }] },
-  { elementType: 'labels.text.stroke', stylers: [{ color: '#100D18' }] },
-  { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#332940' }] },
-  { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#49385B' }] },
-  { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#171D38' }] },
+  { elementType: 'geometry', stylers: [{ color: '#150D18' }] },
+  { elementType: 'labels.text.fill', stylers: [{ color: '#D9BDDE' }] },
+  { elementType: 'labels.text.stroke', stylers: [{ color: '#150D18' }] },
+  { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#2B1A30' }] },
+  { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#3B2342' }] },
+  { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#1E1222' }] },
 ];
 
 export default function RestaurantDetailScreen({ route, navigation }: Props) {
@@ -110,6 +113,14 @@ export default function RestaurantDetailScreen({ route, navigation }: Props) {
     collections.filter((collection) => collection.restaurantIds.includes(restaurant?.id || '')).map((collection) => collection.id)
   ), [collections, restaurant?.id]);
 
+  const signatureDishes = useMemo(() => {
+    if (!restaurant?.signatureDish) return [];
+    return restaurant.signatureDish
+      .split(',')
+      .map((dish) => dish.trim())
+      .filter(Boolean);
+  }, [restaurant?.signatureDish]);
+
   if (!restaurant) {
     return (
       <View style={[styles.screen, { backgroundColor: colors.background, paddingTop: insets.top }]}>
@@ -130,9 +141,8 @@ export default function RestaurantDetailScreen({ route, navigation }: Props) {
   const averageRating = ratedVisits.length
     ? ratedVisits.reduce((sum, visit) => sum + (visit.rating || 0), 0) / ratedVisits.length
     : null;
-  const lastVisit = visits[0];
   const rememberedDishes = Array.from(new Set(
-    visits.flatMap((visit) => visit.dishes.map((dish) => dish.trim()).filter(Boolean))
+    visits.flatMap((visit) => (visit.dishes || []).map((dish) => dish.trim()).filter(Boolean))
   ));
 
   const remove = () => {
@@ -207,14 +217,14 @@ export default function RestaurantDetailScreen({ route, navigation }: Props) {
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.background }]}>
-      <View style={[styles.topBar, { paddingTop: insets.top, backgroundColor: colors.background, borderColor: colors.border }]}>
+      <View style={[styles.topBar, { paddingTop: insets.top, backgroundColor: colors.background }]}>
         <Pressable onPress={() => navigation.goBack()} accessibilityLabel="Retour" style={styles.topAction}>
-          <ArrowLeft size={23} color={colors.textPrimary} />
+          <ArrowLeft size={22} color={colors.textPrimary} />
         </Pressable>
         <Text style={[styles.topTitle, { color: colors.textPrimary }]} numberOfLines={1}>{restaurant.name}</Text>
         {!imported ? (
           <Pressable onPress={() => navigation.navigate('AddRestaurant', { restaurant })} accessibilityLabel="Modifier" style={styles.topAction}>
-            <Pencil size={21} color={colors.textPrimary} />
+            <Pencil size={20} color={colors.textPrimary} />
           </Pressable>
         ) : <View style={styles.topAction} />}
       </View>
@@ -247,9 +257,20 @@ export default function RestaurantDetailScreen({ route, navigation }: Props) {
 
         <View style={styles.content}>
           {friendSource ? (
-            <Pressable onPress={openSourceList} style={({ pressed }) => [styles.sourceRow, Shadows.hard, { backgroundColor: colors.surface, borderColor: colors.textPrimary, opacity: pressed ? 0.66 : 1 }]}>
-              <View style={[styles.sourceIcon, { backgroundColor: `${sourceColor}18` }]}>
-                <UsersRound size={20} color={sourceColor} />
+            <Pressable
+              onPress={openSourceList}
+              style={({ pressed }) => [
+                styles.sourceRow,
+                Shadows.card,
+                {
+                  backgroundColor: colors.surface,
+                  borderColor: colors.border,
+                  opacity: pressed ? 0.72 : 1,
+                },
+              ]}
+            >
+              <View style={[styles.sourceIcon, { backgroundColor: isDark ? colors.surfaceLight : `${sourceColor}15` }]}>
+                <UsersRound size={18} color={sourceColor} />
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={[styles.sourceTitle, { color: sourceColor }]}>{imported ? 'Partagée par' : 'Aussi recommandé par'} {friendSource.ownerName || 'un ami'}</Text>
@@ -260,66 +281,193 @@ export default function RestaurantDetailScreen({ route, navigation }: Props) {
           ) : null}
 
           <View style={styles.categoryLine}>
-            <CategoryIcon size={17} color={category.color} />
-            <Text style={[styles.categoryText, { color: colors.textSecondary }]}>{category.label}</Text>
-            {restaurant.location ? <Text style={[styles.locationLabel, { color: colors.accent }]}>Géolocalisé</Text> : null}
+            <View style={[styles.categoryBadge, Shadows.hairline, { backgroundColor: isDark ? 'rgba(255, 255, 255, 0.08)' : colors.surfaceLight, borderColor: isDark ? 'rgba(255, 255, 255, 0.12)' : colors.border, borderWidth: 1 }]}>
+              <CategoryIcon size={14} color={isDark ? colors.lavender : category.color} />
+              <Text style={[styles.categoryText, { color: isDark ? '#FAF8FC' : colors.primary }]}>{category.label}</Text>
+            </View>
+            {restaurant.location ? (
+              <View style={[styles.locationBadge, Shadows.hairline, { backgroundColor: isDark ? `${colors.link}20` : `${colors.link}12`, borderColor: `${colors.link}30`, borderWidth: 1 }]}>
+                <MapPin size={11} color={colors.link} />
+                <Text style={[styles.locationLabel, { color: colors.link }]}>Géolocalisé</Text>
+              </View>
+            ) : null}
           </View>
-          <Text style={[styles.title, { color: colors.textPrimary }]}>{restaurant.name}</Text>
+          <View style={styles.titleWrap}>
+            <Text style={[styles.title, { color: colors.textPrimary }]}>{restaurant.name}</Text>
+          </View>
           {restaurant.address ? (
             <View style={styles.addressLine}>
-              <MapPin size={17} color={colors.textMuted} />
+              <MapPin size={14} color={colors.textMuted} />
               <Text style={[styles.address, { color: colors.textSecondary }]}>{restaurant.address}</Text>
             </View>
           ) : null}
 
           <View style={styles.actionRow}>
-            <Pressable onPress={openDirections} disabled={!restaurant.location} style={({ pressed }) => [styles.routeAction, { backgroundColor: colors.accent, opacity: !restaurant.location ? 0.4 : pressed ? 0.72 : 1 }]}>
-              <Navigation2 size={17} color={colors.textOnAccent} />
-              <Text style={[styles.routeActionText, { color: colors.textOnAccent }]}>Itinéraire</Text>
+            <Pressable
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
+                openDirections();
+              }}
+              disabled={!restaurant.location}
+              style={({ pressed }) => [
+                styles.routeAction,
+                Shadows.card,
+                {
+                  backgroundColor: isDark ? '#4A154B' : colors.primary,
+                  borderColor: isDark ? '#6B2370' : 'transparent',
+                  borderWidth: isDark ? 1 : 0,
+                  transform: [{ scale: pressed ? 0.96 : 1 }],
+                  opacity: !restaurant.location ? 0.4 : pressed ? 0.85 : 1,
+                },
+              ]}
+            >
+              <Navigation2 size={16} color={colors.textOnPrimary} />
+              <Text style={[styles.routeActionText, { color: colors.textOnPrimary }]}>Itinéraire</Text>
             </Pressable>
             {!imported ? (
-              <Pressable onPress={() => setListModalOpen(true)} style={({ pressed }) => [styles.secondaryAction, { borderColor: colors.border, opacity: pressed ? 0.62 : 1 }]}>
-                <ListPlus size={17} color={colors.accent} />
+              <Pressable
+                onPress={() => {
+                  Haptics.selectionAsync().catch(() => undefined);
+                  setListModalOpen(true);
+                }}
+                style={({ pressed }) => [
+                  styles.secondaryAction,
+                  Shadows.hairline,
+                  {
+                    backgroundColor: colors.surface,
+                    borderColor: colors.border,
+                    transform: [{ scale: pressed ? 0.96 : 1 }],
+                    opacity: pressed ? 0.75 : 1,
+                  },
+                ]}
+              >
+                <ListPlus size={16} color={isDark ? colors.lavender : colors.primary} />
                 <Text style={[styles.secondaryActionText, { color: colors.textPrimary }]}>Listes</Text>
               </Pressable>
             ) : null}
           </View>
 
-            <View style={[styles.summary, Shadows.hard, { backgroundColor: colors.surface, borderColor: colors.textPrimary }]}>
+          <View style={[styles.summary, Shadows.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <SummaryMetric label="Ma note" value={averageRating != null ? `${averageRating.toLocaleString('fr-FR', { maximumFractionDigits: 1 })}/5` : '—'} icon={Star} color={colors.accentYellow} />
-            <SummaryMetric label="Visites" value={String(visits.length)} icon={CalendarDays} color={colors.accent} />
-            <SummaryMetric label="Budget" value={priceBandLabel(restaurant) || 'Non renseigné'} icon={Star} color={colors.accentYellow} />
+            <SummaryMetric label="Visites" value={String(visits.length)} icon={CalendarDays} color={isDark ? colors.lavender : colors.primary} />
+            <SummaryMetric label="Budget" value={priceBandLabel(restaurant) || 'Non renseigné'} icon={WalletCards} color={isDark ? colors.lavender : colors.primary} />
           </View>
 
-          <View style={[styles.journalSection, Shadows.hard, { backgroundColor: colors.surface, borderColor: colors.textPrimary }]}>
+          {signatureDishes.length ? (
+            <View
+              style={[
+                styles.featuredDishBand,
+                Shadows.card,
+                {
+                  backgroundColor: isDark ? '#4A154B' : colors.surfaceAubergine,
+                  borderColor: isDark ? '#6B2370' : 'transparent',
+                  borderWidth: isDark ? 1 : 0,
+                },
+              ]}
+            >
+              <Text style={[styles.featuredDishEyebrow, { color: isDark ? '#FDE68A' : colors.textOnAubergineMute }]}>
+                {signatureDishes.length > 1 ? 'PLATS À RETENIR' : 'PLAT À RETENIR'}
+              </Text>
+              <View style={styles.featuredDishesWrap}>
+                {signatureDishes.map((dish) => (
+                  <View key={dish} style={styles.featuredDishItem}>
+                    <Text style={[styles.featuredDishTitle, { color: '#FFFFFF' }]}>{dish}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+          ) : null}
+
+          {restaurant.description || restaurant.tags?.length ? (
+            <View style={[styles.aboutCard, Shadows.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              {restaurant.description ? (
+                <View style={styles.aboutBlock}>
+                  <View style={styles.aboutHeader}>
+                    <NotebookPen size={17} color={colors.primary} />
+                    <Text style={[styles.aboutTitle, { color: colors.textPrimary }]}>À propos</Text>
+                  </View>
+                  <Text style={[styles.aboutBody, { color: colors.textPrimary }]}>{restaurant.description}</Text>
+                </View>
+              ) : null}
+
+              {restaurant.description && restaurant.tags?.length ? (
+                <View style={[styles.aboutDivider, { backgroundColor: colors.border }]} />
+              ) : null}
+
+              {restaurant.tags?.length ? (
+                <View style={styles.tagsBlock}>
+                  <Text style={[styles.tagsSectionLabel, { color: colors.textMuted }]}>TAGS & AMBIANCE</Text>
+                  <View style={styles.tagsGrid}>
+                    {restaurant.tags.map((tag) => (
+                      <View
+                        key={tag}
+                        style={[
+                          styles.tagChip,
+                          {
+                            backgroundColor: isDark ? colors.surfaceLight : `${colors.primary}0D`,
+                            borderColor: isDark ? colors.border : `${colors.primary}18`,
+                          },
+                        ]}
+                      >
+                        <Text style={[styles.tagHash, { color: colors.primary }]}>#</Text>
+                        <Text style={[styles.tagText, { color: colors.textPrimary }]}>{tag}</Text>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              ) : null}
+            </View>
+          ) : null}
+
+          <View style={[styles.journalSection, Shadows.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <View style={styles.journalHeader}>
               <View style={styles.journalHeaderCopy}>
                 <Text style={[styles.sectionTitle, styles.journalTitle, { color: colors.textPrimary }]}>Journal</Text>
                 <View style={styles.privateLine}>
-                  <LockKeyhole size={14} color={colors.textMuted} />
-                  <Text style={[styles.privateText, { color: colors.textMuted }]}>Personnel · jamais partagé</Text>
+                  <LockKeyhole size={13} color={colors.lavender} />
+                  <Text style={[styles.privateText, { color: colors.textMuted }]}>Personnel</Text>
                 </View>
               </View>
               <Pressable
-                onPress={openNewVisit}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
+                  openNewVisit();
+                }}
                 accessibilityRole="button"
                 style={({ pressed }) => [
                   styles.addVisitButton,
-                  { backgroundColor: colors.accent, opacity: pressed ? 0.72 : 1 },
+                  Shadows.hairline,
+                  {
+                    backgroundColor: colors.primary,
+                    transform: [{ scale: pressed ? 0.96 : 1 }],
+                    opacity: pressed ? 0.85 : 1,
+                  },
                 ]}
               >
-                <Plus size={18} color={colors.textOnAccent} />
-                <Text style={[styles.addVisitText, { color: colors.textOnAccent }]}>Noter une visite</Text>
+                <Plus size={15} color={colors.textOnPrimary} strokeWidth={2.4} />
+                <Text style={[styles.addVisitText, { color: colors.textOnPrimary }]}>Noter une visite</Text>
               </Pressable>
             </View>
 
             {rememberedDishes.length ? (
-              <View style={[styles.rememberedRow, { backgroundColor: colors.surfaceLight }]}>
-                <Text style={[styles.rememberedLabel, { color: colors.textPrimary }]}>Plats mémorisés</Text>
-                <Text style={[styles.rememberedText, { color: colors.textSecondary }]}>
-                  {rememberedDishes.slice(0, 6).join(' · ')}
-                  {rememberedDishes.length > 6 ? ` · +${rememberedDishes.length - 6}` : ''}
-                </Text>
+              <View style={styles.rememberedSection}>
+                <Text style={[styles.rememberedLabel, { color: colors.textMuted }]}>PLATS PRÉCÉDEMMENT TESTÉS</Text>
+                <View style={styles.rememberedGrid}>
+                  {rememberedDishes.map((dish) => (
+                    <View
+                      key={dish}
+                      style={[
+                        styles.rememberedChip,
+                        Shadows.hairline,
+                        { backgroundColor: isDark ? colors.surfaceAubergine : `${colors.primary}0D`, borderColor: isDark ? colors.border : `${colors.primary}18` },
+                      ]}
+                    >
+                      <Text style={[styles.rememberedChipText, { color: colors.primary, fontFamily: FontFamily.medium }]}>
+                        {dish}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
               </View>
             ) : null}
 
@@ -330,41 +478,18 @@ export default function RestaurantDetailScreen({ route, navigation }: Props) {
                 ))}
               </View>
             ) : (
-              <View style={[styles.emptyJournal, { backgroundColor: colors.surfaceLight }]}>
+              <View style={[styles.emptyJournal, { backgroundColor: isDark ? colors.surfaceLight : colors.background }]}>
                 <Text style={[styles.emptyJournalTitle, { color: colors.textPrimary }]}>Aucune visite personnelle</Text>
                 <Text style={[styles.emptyJournalText, { color: colors.textMuted }]}>Ajoutez un passage pour retrouver vos notes, vos plats et votre moyenne ici.</Text>
               </View>
             )}
           </View>
 
-          {restaurant.signatureDish || restaurant.description || restaurant.tags?.length ? (
-            <View style={[styles.section, Shadows.hard, { backgroundColor: colors.surface, borderColor: colors.textPrimary }]}>
-              {restaurant.description ? (
-                <>
-                  <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>À propos</Text>
-                  <Text style={[styles.body, { color: colors.textSecondary }]}>{restaurant.description}</Text>
-                </>
-              ) : null}
-              {restaurant.signatureDish ? (
-                <View style={restaurant.description ? styles.sectionSubsection : undefined}>
-                  <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Plat à retenir</Text>
-                  <Text style={[styles.body, { color: colors.textPrimary }]}>{restaurant.signatureDish}</Text>
-                </View>
-              ) : null}
-              {restaurant.tags?.length ? (
-                <View style={restaurant.description || restaurant.signatureDish ? styles.sectionSubsection : undefined}>
-                  <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Tags</Text>
-                  <Text style={[styles.body, { color: colors.textSecondary }]}>{restaurant.tags.join(' · ')}</Text>
-                </View>
-              ) : null}
-            </View>
-          ) : null}
-
           {restaurant.location ? (
-            <View style={[styles.locationSection, Shadows.hard, { backgroundColor: colors.surface, borderColor: colors.textPrimary }]}>
+            <View style={[styles.locationSection, Shadows.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
               <View style={styles.locationHeader}>
                 <View style={styles.locationHeaderCopy}>
-                  <MapPin size={18} color={colors.accent} />
+                  <MapPin size={18} color={colors.primary} />
                   <Text style={[styles.locationTitle, { color: colors.textPrimary }]}>Emplacement</Text>
                 </View>
                 <Pressable
@@ -373,8 +498,8 @@ export default function RestaurantDetailScreen({ route, navigation }: Props) {
                   accessibilityLabel="Ouvrir l’itinéraire"
                   style={({ pressed }) => [styles.locationAction, { opacity: pressed ? 0.58 : 1 }]}
                 >
-                  <Text style={[styles.locationActionText, { color: colors.accent }]}>Itinéraire</Text>
-                  <Navigation2 size={15} color={colors.accent} />
+                  <Text style={[styles.locationActionText, { color: colors.link }]}>Itinéraire</Text>
+                  <Navigation2 size={14} color={colors.link} />
                 </Pressable>
               </View>
               <MapView
@@ -401,8 +526,8 @@ export default function RestaurantDetailScreen({ route, navigation }: Props) {
                   tracksViewChanges={false}
                   accessibilityLabel={`Emplacement de ${restaurant.name}`}
                 >
-                  <View style={[styles.detailMarker, { backgroundColor: colors.accentPink, borderColor: colors.surface }]}>
-                    <MapPin size={17} color={colors.textOnAccent} fill={colors.textOnAccent} />
+                  <View style={[styles.detailMarker, { backgroundColor: colors.primary, borderColor: colors.surface }]}>
+                    <MapPin size={16} color={colors.textOnPrimary} fill={colors.textOnPrimary} />
                   </View>
                 </Marker>
               </MapView>
@@ -414,16 +539,18 @@ export default function RestaurantDetailScreen({ route, navigation }: Props) {
 
           {!imported ? (
             <>
-              <View style={[styles.listStatus, Shadows.hard, { backgroundColor: colors.surface, borderColor: colors.textPrimary }]}>
-                <ListPlus size={18} color={colors.accent} />
-                <Text style={[styles.listStatusText, { color: colors.textSecondary }]}>{membership.size ? `Dans ${membership.size} liste${membership.size > 1 ? 's' : ''}` : 'Dans aucune liste'}</Text>
+              <View style={[styles.listStatus, Shadows.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                <ListPlus size={18} color={colors.primary} />
+                <Text style={[styles.listStatusText, { color: colors.textSecondary }]}>
+                  {membership.size ? `Dans ${membership.size} liste${membership.size > 1 ? 's' : ''}` : 'Dans aucune liste'}
+                </Text>
                 <Pressable onPress={() => setListModalOpen(true)} style={({ pressed }) => [styles.listManageButton, { opacity: pressed ? 0.58 : 1 }]}>
-                  <Text style={[styles.listManageText, { color: colors.accent }]}>Gérer</Text>
-                  <ChevronRight size={16} color={colors.accent} />
+                  <Text style={[styles.listManageText, { color: colors.link }]}>Gérer</Text>
+                  <ChevronRight size={16} color={colors.link} />
                 </Pressable>
               </View>
-              <Pressable onPress={remove} style={({ pressed }) => [styles.deleteAction, { borderTopColor: colors.border, opacity: pressed ? 0.55 : 1 }]}>
-                <Trash2 size={18} color={colors.danger} />
+              <Pressable onPress={remove} style={({ pressed }) => [styles.deleteAction, { opacity: pressed ? 0.55 : 1 }]}>
+                <Trash2 size={17} color={colors.danger} />
                 <Text style={[styles.deleteText, { color: colors.danger }]}>Supprimer l’adresse</Text>
               </Pressable>
             </>
@@ -449,32 +576,26 @@ export default function RestaurantDetailScreen({ route, navigation }: Props) {
               <Text style={styles.galleryCount}>{galleryIndex + 1}/{restaurant.images.length}</Text>
             </View>
             <Pressable onPress={() => setGalleryOpen(false)} style={styles.galleryClose} accessibilityLabel="Fermer les photos">
-              <X size={22} color="#FFFFFF" />
+              <X size={20} color="#FFFFFF" />
             </Pressable>
           </View>
         </View>
       </Modal>
 
       <Modal visible={listModalOpen} transparent={false} presentationStyle="fullScreen" animationType="slide" statusBarTranslucent onRequestClose={() => setListModalOpen(false)}>
-        <View style={[styles.modalRoot, { backgroundColor: colors.background }]}>
+        <View style={[styles.modalRoot, { backgroundColor: colors.surface }]}>
           <View
             style={[
               styles.listModalSheet,
               {
-                backgroundColor: colors.background,
+                backgroundColor: colors.surface,
                 paddingTop: insets.top,
               },
             ]}
           >
-            <View pointerEvents="none" style={StyleSheet.absoluteFillObject}>
-              <View style={[styles.listModalBackdropShape, styles.listModalBackdropPink, { backgroundColor: `${colors.accentPink}18` }]} />
-              <View style={[styles.listModalBackdropShape, styles.listModalBackdropIndigo, { backgroundColor: `${colors.accent}16` }]} />
-              <View style={[styles.listModalBackdropStamp, { borderColor: `${colors.textPrimary}12` }]} />
-            </View>
-
             <View style={styles.listModalHeader}>
-              <View style={[styles.listModalHeaderIcon, { backgroundColor: `${colors.accentPink}18`, borderColor: colors.textPrimary }]}>
-                <ListPlus size={24} color={colors.accentPink} />
+              <View style={[styles.listModalHeaderIcon, { backgroundColor: isDark ? colors.surfaceLight : colors.surfaceLight }]}>
+                <ListPlus size={22} color={colors.primary} />
               </View>
               <View style={styles.listModalHeaderCopy}>
                 <Text style={[styles.listModalTitle, { color: colors.textPrimary }]}>Ajouter à mes listes</Text>
@@ -483,31 +604,27 @@ export default function RestaurantDetailScreen({ route, navigation }: Props) {
                 </Text>
               </View>
               <Pressable onPress={() => setListModalOpen(false)} accessibilityLabel="Fermer" style={styles.topAction}>
-                <X size={22} color={colors.textPrimary} />
+                <X size={20} color={colors.textPrimary} />
               </Pressable>
             </View>
 
             <ScrollView
               style={[styles.listModalScroll, { backgroundColor: 'transparent' }]}
-              contentContainerStyle={[styles.listModalContent, { backgroundColor: 'transparent' }]}
-              bounces={false}
-              alwaysBounceVertical={false}
-              contentInsetAdjustmentBehavior="never"
-              automaticallyAdjustContentInsets={false}
+              contentContainerStyle={styles.listModalContent}
               showsVerticalScrollIndicator={false}
             >
-              <View style={[styles.listModalSummary, Shadows.surface, { backgroundColor: `${colors.accentPink}12`, borderColor: colors.textPrimary }]}>
+              <View style={[styles.listModalSummary, Shadows.hairline, { backgroundColor: isDark ? colors.surfaceLight : colors.background, borderColor: colors.border }]}>
                 <View style={styles.listModalSummaryCopy}>
                   <View style={styles.listModalSummaryHeading}>
-                    <Sparkles size={16} color={colors.accentPink} />
+                    <Sparkles size={16} color={colors.primary} />
                     <Text style={[styles.listModalSummaryLabel, { color: colors.textPrimary }]}>Sélection actuelle</Text>
                   </View>
                   <Text style={[styles.listModalSummaryDetail, { color: colors.textMuted }]}>
                     {membership.size ? `${membership.size} liste${membership.size !== 1 ? 's' : ''} sélectionnée${membership.size !== 1 ? 's' : ''}` : 'Aucune liste sélectionnée'}
                   </Text>
                 </View>
-                <View style={[styles.listModalCount, { backgroundColor: membership.size ? colors.accentPink : colors.surface, borderColor: colors.textPrimary }]}>
-                  <Text style={[styles.listModalCountText, { color: membership.size ? colors.textOnAccent : colors.accentPink }]}>{membership.size}</Text>
+                <View style={[styles.listModalCount, { backgroundColor: colors.primary }]}>
+                  <Text style={[styles.listModalCountText, { color: colors.textOnPrimary }]}>{membership.size}</Text>
                 </View>
               </View>
 
@@ -523,48 +640,60 @@ export default function RestaurantDetailScreen({ route, navigation }: Props) {
                     accessibilityLabel={`${selected ? 'Retirer de' : 'Ajouter à'} ${collection.name}`}
                     style={({ pressed }) => [
                       styles.collectionRow,
-                      Shadows.surface,
+                      Shadows.hairline,
                       {
-                        backgroundColor: selected ? `${colors.accent}16` : colors.surface,
-                        borderColor: selected ? colors.accent : colors.textPrimary,
-                        opacity: pressed ? 0.62 : 1,
+                        backgroundColor: selected ? (isDark ? colors.surfaceAubergine : `${colors.primary}10`) : colors.surface,
+                        borderColor: selected ? colors.primary : colors.border,
+                        opacity: pressed ? 0.65 : 1,
                       },
                     ]}
                   >
-                    <View style={[styles.collectionIcon, { backgroundColor: selected ? `${colors.accent}12` : colors.surfaceLight, borderColor: selected ? colors.accent : colors.textPrimary }]}>
-                      <CollectionIcon size={20} color={selected ? colors.accent : colors.textSecondary} />
+                    <View style={[styles.collectionIcon, { backgroundColor: isDark ? colors.surfaceLight : colors.background }]}>
+                      <CollectionIcon size={20} color={selected ? colors.primary : colors.textSecondary} />
                     </View>
                     <View style={styles.collectionCopy}>
-                      <Text style={[styles.collectionName, { color: selected ? colors.accent : colors.textPrimary }]}>{collection.name}</Text>
+                      <Text style={[styles.collectionName, { color: selected ? colors.primary : colors.textPrimary }]}>{collection.name}</Text>
                       <Text style={[styles.collectionMeta, { color: colors.textMuted }]}>
                         {collection.restaurantIds.length} adresse{collection.restaurantIds.length !== 1 ? 's' : ''}
                       </Text>
                     </View>
-                    <View style={[styles.checkbox, { borderColor: selected ? colors.accent : colors.textPrimary, backgroundColor: selected ? colors.accent : colors.surface }]}>
-                      {selected ? <Check size={15} color={colors.textOnAccent} strokeWidth={3} /> : null}
+                    <View
+                      style={[
+                        styles.checkbox,
+                        {
+                          borderColor: selected ? colors.primary : colors.border,
+                          backgroundColor: selected ? colors.primary : 'transparent',
+                        },
+                      ]}
+                    >
+                      {selected ? <Check size={14} color={colors.textOnPrimary} strokeWidth={3} /> : null}
                     </View>
                   </Pressable>
                 );
               }) : (
-                <View style={[styles.noListsPanel, Shadows.surface, { backgroundColor: colors.surface, borderColor: colors.textPrimary }]}>
-                  <ListPlus size={22} color={colors.accent} />
+                <View style={[styles.noListsPanel, { backgroundColor: isDark ? colors.surfaceLight : colors.background, borderColor: colors.border }]}>
+                  <ListPlus size={22} color={colors.primary} />
                   <Text style={[styles.noListsTitle, { color: colors.textPrimary }]}>Aucune liste personnelle</Text>
                   <Text style={[styles.noLists, { color: colors.textMuted }]}>Créez d’abord une liste depuis l’onglet Listes.</Text>
                 </View>
               )}
-
             </ScrollView>
-            <View style={[styles.listModalFooter, { backgroundColor: colors.background, paddingBottom: insets.bottom + Spacing.md }]}>
+
+            <View style={[styles.listModalFooter, { backgroundColor: colors.surface, paddingBottom: insets.bottom + Spacing.md }]}>
               <View style={styles.listModalFooterHintRow}>
-                <Check size={15} color={colors.accentPink} strokeWidth={3} />
+                <Check size={14} color={colors.success} strokeWidth={2.5} />
                 <Text style={[styles.listModalFooterHint, { color: colors.textMuted }]}>Enregistré automatiquement</Text>
               </View>
               <Pressable
                 onPress={() => setListModalOpen(false)}
                 accessibilityRole="button"
-                style={({ pressed }) => [styles.listModalDone, Shadows.hard, { backgroundColor: colors.accent, borderColor: colors.textPrimary, opacity: pressed ? 0.72 : 1 }]}
+                style={({ pressed }) => [
+                  styles.listModalDone,
+                  Shadows.card,
+                  { backgroundColor: colors.primary, opacity: pressed ? 0.78 : 1 },
+                ]}
               >
-                <Text style={[styles.listModalDoneText, { color: colors.textOnAccent }]}>Terminé</Text>
+                <Text style={[styles.listModalDoneText, { color: colors.textOnPrimary }]}>Terminé</Text>
               </Pressable>
             </View>
           </View>
@@ -572,7 +701,7 @@ export default function RestaurantDetailScreen({ route, navigation }: Props) {
             pointerEvents="none"
             style={[
               styles.bottomSafeAreaFill,
-              { height: insets.bottom + 2, backgroundColor: colors.background },
+              { height: insets.bottom + 2, backgroundColor: colors.surface },
             ]}
           />
         </View>
@@ -599,17 +728,17 @@ export default function RestaurantDetailScreen({ route, navigation }: Props) {
 
   function VisitEntry({ visit }: { visit: Visit }) {
     return (
-      <View style={[
-        styles.visitEntry,
-        {
-          backgroundColor: colors.surfaceLight,
-        },
-      ]}>
-        <View style={[styles.timelineDot, { backgroundColor: colors.accentPink, borderColor: colors.background }]} />
+      <View style={[styles.visitEntry, Shadows.hairline, { backgroundColor: isDark ? colors.surfaceAubergine : colors.surfaceLight, borderColor: isDark ? colors.border : `${colors.primary}18` }]}>
+        {/* Header: Date + Star + Action Icons */}
         <View style={styles.visitHeading}>
-          <View style={styles.visitHeadingCopy}>
+          <View style={styles.visitHeadingLeft}>
             <Text style={[styles.visitDate, { color: colors.textPrimary }]}>{formatVisitDate(visit.visitedAt)}</Text>
-            {visit.dateIsEstimated ? <Text style={[styles.estimatedDate, { color: colors.textMuted }]}>Date approximative</Text> : null}
+            {visit.rating != null ? (
+              <View style={[styles.visitRatingPill, { backgroundColor: isDark ? 'rgba(217, 119, 6, 0.18)' : '#FFF9EB', borderColor: isDark ? 'rgba(217, 119, 6, 0.3)' : '#FDE68A' }]}>
+                <Star size={11} color={colors.accentYellow} fill={colors.accentYellow} />
+                <Text style={[styles.visitRatingText, { color: isDark ? '#FCD34D' : '#B45309' }]}>{visit.rating}/5</Text>
+              </View>
+            ) : null}
           </View>
           <View style={styles.visitActions}>
             <Pressable
@@ -618,7 +747,7 @@ export default function RestaurantDetailScreen({ route, navigation }: Props) {
               accessibilityLabel={`Modifier la visite du ${formatVisitDate(visit.visitedAt)}`}
               style={({ pressed }) => [styles.visitIconButton, { opacity: pressed ? 0.5 : 1 }]}
             >
-              <Pencil size={17} color={colors.accent} />
+              <Pencil size={14} color={colors.textMuted} />
             </Pressable>
             <Pressable
               onPress={() => removeVisit(visit)}
@@ -626,48 +755,73 @@ export default function RestaurantDetailScreen({ route, navigation }: Props) {
               accessibilityLabel={`Supprimer la visite du ${formatVisitDate(visit.visitedAt)}`}
               style={({ pressed }) => [styles.visitIconButton, { opacity: pressed ? 0.5 : 1 }]}
             >
-              <Trash2 size={17} color={colors.danger} />
+              <Trash2 size={14} color={colors.danger} />
             </Pressable>
           </View>
         </View>
 
-        <View style={styles.visitMetaRow}>
-          {visit.rating != null ? (
-            <View style={styles.visitMeta}>
-              <Star size={15} color={colors.accentYellow} fill={colors.accentYellow} />
-              <Text style={[styles.visitMetaText, { color: colors.textSecondary }]}>{visit.rating}/5</Text>
-            </View>
-          ) : null}
-          {visit.wouldReturn != null ? (
-            <View style={styles.visitMeta}>
-              <Heart size={15} color={visit.wouldReturn ? colors.accentGreen : colors.textMuted} />
-              <Text style={[styles.visitMetaText, { color: colors.textSecondary }]}>
-                {visit.wouldReturn ? 'J’y retournerais' : 'Je n’y retournerais pas'}
+        {/* Lightweight metadata line */}
+        {(visit.amount != null || visit.wouldReturn != null || visit.companions) ? (
+          <View style={styles.visitMetaInlineRow}>
+            {visit.amount != null ? (
+              <Text style={[styles.visitMetaInlineItem, { color: colors.textPrimary, fontFamily: FontFamily.semiBold }]}>
+                {formatAmount(visit.amount)}
               </Text>
-            </View>
-          ) : null}
-          {visit.amount != null ? (
-            <View style={styles.visitMeta}>
-              <Star size={15} color={colors.accentYellow} fill={colors.accentYellow} />
-              <Text style={[styles.visitMetaText, { color: colors.textSecondary }]}>{formatAmount(visit.amount)}</Text>
-            </View>
-          ) : null}
-        </View>
+            ) : null}
+            {visit.amount != null && (visit.wouldReturn != null || visit.companions) ? (
+              <Text style={{ color: colors.textMuted }}>·</Text>
+            ) : null}
+            {visit.wouldReturn != null ? (
+              <Text style={[styles.visitMetaInlineItem, { color: visit.wouldReturn ? colors.success : colors.textMuted, fontFamily: FontFamily.medium }]}>
+                {visit.wouldReturn ? '❤️ J’y retournerais' : '💔 Pas convaincu'}
+              </Text>
+            ) : null}
+            {visit.wouldReturn != null && visit.companions ? (
+              <Text style={{ color: colors.textMuted }}>·</Text>
+            ) : null}
+            {visit.companions ? (
+              <Text style={[styles.visitMetaInlineItem, { color: colors.textSecondary }]}>
+                Avec <Text style={{ color: colors.textPrimary, fontFamily: FontFamily.medium }}>{visit.companions}</Text>
+              </Text>
+            ) : null}
+          </View>
+        ) : null}
 
-        {visit.dishes.length ? (
-          <Text style={[styles.visitDetail, { color: colors.textSecondary }]}>
-            <Text style={[styles.visitDetailLabel, { color: colors.textPrimary }]}>Plats · </Text>{visit.dishes.join(', ')}
-          </Text>
+        {/* Dishes: clean white chips with same color for all */}
+        {visit.dishes && visit.dishes.length ? (
+          <View style={styles.dishesInlineWrap}>
+            {visit.dishes.map((dish) => (
+              <View
+                key={dish}
+                style={[
+                  styles.dishItem,
+                  Shadows.hairline,
+                  { backgroundColor: colors.surface, borderColor: isDark ? colors.border : `${colors.primary}20` },
+                ]}
+              >
+                <Text style={[styles.dishItemText, { color: colors.textPrimary, fontFamily: FontFamily.semiBold }]}>
+                  {dish}
+                </Text>
+              </View>
+            ))}
+          </View>
         ) : null}
-        {visit.companions ? (
-          <Text style={[styles.visitDetail, { color: colors.textSecondary }]}>
-            <Text style={[styles.visitDetailLabel, { color: colors.textPrimary }]}>Avec · </Text>{visit.companions}
-          </Text>
+
+        {/* Notes (clean white card on the soft lavender card) */}
+        {visit.notes ? (
+          <View style={[styles.visitSimpleNoteBox, { backgroundColor: colors.surface, borderColor: isDark ? colors.border : `${colors.primary}15` }]}>
+            <Text style={[styles.visitSimpleNote, { color: colors.textPrimary }]}>
+              {visit.notes}
+            </Text>
+          </View>
         ) : null}
-        {visit.notes ? <Text style={[styles.visitNotes, { color: colors.textSecondary }]}>{visit.notes}</Text> : null}
-        {visit.imageUris.length ? (
+
+        {/* Photos */}
+        {visit.imageUris && visit.imageUris.length ? (
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.visitPhotos}>
-            {visit.imageUris.map((uri) => <Image key={uri} source={{ uri }} style={styles.visitPhoto} />)}
+            {visit.imageUris.map((uri) => (
+              <Image key={uri} source={{ uri }} style={[styles.visitPhoto, { borderColor: colors.border }]} />
+            ))}
           </ScrollView>
         ) : null}
       </View>
@@ -677,116 +831,292 @@ export default function RestaurantDetailScreen({ route, navigation }: Props) {
 
 const styles = StyleSheet.create({
   screen: { flex: 1 },
-  topBar: { minHeight: 54, paddingHorizontal: Spacing.sm, paddingBottom: 5, flexDirection: 'row', alignItems: 'flex-end', borderBottomWidth: 0 },
+  topBar: { minHeight: 50, paddingHorizontal: Spacing.sm, paddingBottom: 4, flexDirection: 'row', alignItems: 'center' },
   topAction: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-  topTitle: { flex: 1, paddingBottom: 12, fontFamily: FontFamily.semiBold, fontSize: FontSize.md, textAlign: 'center' },
+  topTitle: { flex: 1, fontFamily: FontFamily.bold, fontSize: FontSize.md, letterSpacing: -0.2, textAlign: 'center' },
   hero: { position: 'relative' },
   heroImage: { height: 260 },
-  artwork: { width: '100%', height: 260, borderWidth: 0, borderRadius: 0 },
-  photoCounter: { position: 'absolute', right: Spacing.md, bottom: Spacing.md, minWidth: 42, minHeight: 28, paddingHorizontal: Spacing.sm, alignItems: 'center', justifyContent: 'center', borderRadius: BorderRadius.full },
+  artwork: { width: '100%', height: 240, borderWidth: 0, borderRadius: 0 },
+  photoCounter: {
+    position: 'absolute',
+    right: Spacing.md,
+    bottom: Spacing.md,
+    minWidth: 42,
+    minHeight: 28,
+    paddingHorizontal: Spacing.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: BorderRadius.sm,
+  },
   photoCounterText: { color: '#FFFFFF', fontFamily: FontFamily.semiBold, fontSize: FontSize.xs },
   content: { paddingHorizontal: Spacing.lg, paddingTop: Spacing.lg },
-  sourceRow: { minHeight: 64, marginBottom: Spacing.lg, padding: Spacing.md, flexDirection: 'row', alignItems: 'center', gap: Spacing.md, borderWidth: 1.5, borderRadius: 12 },
-  sourceIcon: { width: 38, height: 38, alignItems: 'center', justifyContent: 'center', borderRadius: BorderRadius.md },
+  sourceRow: {
+    minHeight: 60,
+    marginBottom: Spacing.lg,
+    padding: Spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.md,
+    borderWidth: 1,
+    borderRadius: BorderRadius.xl,
+  },
+  sourceIcon: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center', borderRadius: BorderRadius.md },
   sourceTitle: { fontFamily: FontFamily.semiBold, fontSize: FontSize.sm },
   sourceDetail: { marginTop: 2, fontFamily: FontFamily.regular, fontSize: FontSize.xs },
-  categoryLine: { flexDirection: 'row', alignItems: 'center', gap: 7 },
-  categoryText: { fontFamily: FontFamily.medium, fontSize: FontSize.sm },
-  locationLabel: { marginLeft: 'auto', fontFamily: FontFamily.medium, fontSize: FontSize.xs },
-  title: { marginTop: Spacing.sm, fontFamily: FontFamily.semiBold, fontSize: FontSize.xxl, lineHeight: 34, letterSpacing: -0.8 },
-  addressLine: { marginTop: Spacing.md, flexDirection: 'row', alignItems: 'flex-start', gap: 7 },
-  address: { flex: 1, fontFamily: FontFamily.regular, fontSize: FontSize.sm, lineHeight: 21 },
-  actionRow: { marginTop: Spacing.xl, flexDirection: 'row', gap: Spacing.sm },
-  routeAction: { minHeight: 44, paddingHorizontal: Spacing.lg, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, borderRadius: BorderRadius.md },
-  routeActionText: { fontFamily: FontFamily.semiBold, fontSize: FontSize.sm },
-  secondaryAction: { minHeight: 44, paddingHorizontal: Spacing.lg, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, borderWidth: 1, borderRadius: BorderRadius.md },
-  secondaryActionText: { fontFamily: FontFamily.semiBold, fontSize: FontSize.sm },
-  summary: { marginTop: Spacing.xl, padding: Spacing.md, flexDirection: 'row', borderWidth: 1.5, borderRadius: 12 },
-  summaryMetric: { flex: 1, minWidth: 0, alignItems: 'center', gap: 4 },
-  summaryLabel: { fontFamily: FontFamily.regular, fontSize: FontSize.xs },
-  summaryValue: { maxWidth: '100%', fontFamily: FontFamily.semiBold, fontSize: FontSize.sm },
-  section: { marginTop: Spacing.xxl, padding: Spacing.lg, borderWidth: 1.5, borderRadius: 12 },
-  sectionSubsection: { marginTop: Spacing.xl },
-  sectionTitle: { marginBottom: Spacing.sm, fontFamily: FontFamily.semiBold, fontSize: FontSize.lg },
-  body: { fontFamily: FontFamily.regular, fontSize: FontSize.md, lineHeight: 24 },
-  journalSection: { marginTop: Spacing.xxxl, padding: Spacing.lg, borderWidth: 1.5, borderRadius: 12 },
-  journalHeader: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: Spacing.md },
-  journalHeaderCopy: { flex: 1, minWidth: 120 },
-  journalTitle: { marginBottom: 0 },
-  privateLine: { marginTop: 4, flexDirection: 'row', alignItems: 'center', gap: 6 },
-  privateText: { fontFamily: FontFamily.regular, fontSize: FontSize.xs },
-  addVisitButton: {
-    minHeight: 44,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
+  categoryLine: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  categoryBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 8,
+    paddingVertical: 3.5,
+    borderRadius: BorderRadius.sm,
+  },
+  categoryText: { fontFamily: FontFamily.semiBold, fontSize: FontSize.xs },
+  locationBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 7,
+    paddingVertical: 3.5,
+    borderRadius: BorderRadius.sm,
+  },
+  locationLabel: { fontFamily: FontFamily.medium, fontSize: FontSize.xs - 1 },
+  titleWrap: { marginTop: Spacing.md + 2 },
+  title: {
+    fontFamily: FontFamily.bold,
+    fontSize: 27,
+    lineHeight: 33,
+    letterSpacing: -0.7,
+  },
+  addressLine: { marginTop: 8, flexDirection: 'row', alignItems: 'center', gap: 6 },
+  address: { flex: 1, fontFamily: FontFamily.regular, fontSize: FontSize.sm - 0.5, lineHeight: 19 },
+  actionRow: { marginTop: Spacing.lg, flexDirection: 'row', gap: Spacing.sm },
+  routeAction: {
+    minHeight: 46,
+    paddingHorizontal: Spacing.xl,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 7,
-    borderRadius: BorderRadius.md,
+    borderRadius: BorderRadius.button,
   },
-  addVisitText: { fontFamily: FontFamily.semiBold, fontSize: FontSize.sm, textAlign: 'center' },
-  rememberedRow: {
+  routeActionText: { fontFamily: FontFamily.bold, fontSize: FontSize.sm, letterSpacing: 0.1 },
+  secondaryAction: {
+    minHeight: 46,
+    paddingHorizontal: Spacing.xl,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 7,
+    borderWidth: 1,
+    borderRadius: BorderRadius.button,
+  },
+  secondaryActionText: { fontFamily: FontFamily.semiBold, fontSize: FontSize.sm },
+  summary: {
     marginTop: Spacing.xl,
     padding: Spacing.md,
-    borderRadius: BorderRadius.lg,
-    ...Shadows.hairline,
+    flexDirection: 'row',
+    borderWidth: 1,
+    borderRadius: BorderRadius.xl,
   },
-  rememberedLabel: { fontFamily: FontFamily.semiBold, fontSize: FontSize.sm },
-  rememberedText: { marginTop: 5, fontFamily: FontFamily.regular, fontSize: FontSize.sm, lineHeight: 21 },
-  timeline: { marginTop: Spacing.xl, gap: Spacing.sm },
+  summaryMetric: { flex: 1, minWidth: 0, alignItems: 'center', gap: 4 },
+  summaryLabel: { fontFamily: FontFamily.regular, fontSize: FontSize.xs },
+  summaryValue: { maxWidth: '100%', fontFamily: FontFamily.bold, fontSize: FontSize.sm },
+  featuredDishBand: {
+    marginTop: Spacing.lg,
+    padding: Spacing.lg,
+    borderRadius: BorderRadius.xl,
+  },
+  featuredDishEyebrow: {
+    fontFamily: FontFamily.bold,
+    fontSize: FontSize.xs - 1,
+    letterSpacing: 0.96,
+  },
+  featuredDishesWrap: {
+    marginTop: 6,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  featuredDishItem: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    borderRadius: BorderRadius.sm,
+  },
+  featuredDishTitle: {
+    fontFamily: FontFamily.medium,
+    fontSize: 15,
+    lineHeight: 20,
+    letterSpacing: -0.1,
+  },
+  aboutCard: {
+    marginTop: Spacing.xl,
+    padding: Spacing.xl,
+    borderWidth: 1,
+    borderRadius: BorderRadius.xl,
+  },
+  aboutBlock: {
+    gap: Spacing.xs,
+  },
+  aboutHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    marginBottom: 2,
+  },
+  aboutTitle: {
+    fontFamily: FontFamily.bold,
+    fontSize: FontSize.md,
+    letterSpacing: -0.2,
+  },
+  aboutBody: {
+    fontFamily: FontFamily.regular,
+    fontSize: FontSize.sm + 1,
+    lineHeight: 22,
+  },
+  aboutDivider: {
+    height: 1,
+    marginVertical: Spacing.lg,
+  },
+  tagsBlock: {
+    gap: Spacing.sm,
+  },
+  tagsSectionLabel: {
+    fontFamily: FontFamily.bold,
+    fontSize: FontSize.xs - 1,
+    letterSpacing: 0.9,
+  },
+  tagsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  tagChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderWidth: 1,
+    borderRadius: BorderRadius.sm,
+  },
+  tagHash: {
+    fontFamily: FontFamily.bold,
+    fontSize: FontSize.xs,
+  },
+  tagText: {
+    fontFamily: FontFamily.medium,
+    fontSize: FontSize.xs,
+  },
+  sectionTitle: { fontFamily: FontFamily.bold, fontSize: FontSize.md, letterSpacing: -0.2 },
+  journalSection: {
+    marginTop: Spacing.xl,
+    padding: Spacing.lg,
+    borderWidth: 1,
+    borderRadius: BorderRadius.xl,
+  },
+  journalHeader: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: Spacing.md },
+  journalHeaderCopy: { flex: 1, minWidth: 120 },
+  journalTitle: { fontFamily: FontFamily.bold, fontSize: FontSize.md, letterSpacing: -0.2, marginBottom: 0 },
+  privateLine: { marginTop: 3, flexDirection: 'row', alignItems: 'center', gap: 5 },
+  privateText: { fontFamily: FontFamily.regular, fontSize: FontSize.xs },
+  addVisitButton: {
+    minHeight: 40,
+    paddingHorizontal: Spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    borderWidth: 1,
+    borderRadius: BorderRadius.button,
+  },
+  addVisitText: { fontFamily: FontFamily.semiBold, fontSize: FontSize.xs },
+  rememberedSection: {
+    marginTop: Spacing.lg,
+    paddingBottom: 4,
+  },
+  rememberedLabel: {
+    fontFamily: FontFamily.bold,
+    fontSize: FontSize.xs - 1,
+    letterSpacing: 0.85,
+  },
+  rememberedGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 7,
+    marginTop: 8,
+  },
+  rememberedChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderWidth: 1,
+    borderRadius: BorderRadius.sm,
+  },
+  rememberedChipText: {
+    fontSize: FontSize.xs,
+  },
+  timeline: { marginTop: Spacing.lg, gap: Spacing.lg },
   visitEntry: {
-    position: 'relative',
-    minHeight: 72,
-    padding: Spacing.md,
-    paddingLeft: Spacing.lg,
+    padding: Spacing.lg,
+    borderWidth: 1,
     borderRadius: BorderRadius.lg,
-    ...Shadows.hairline,
+    gap: Spacing.sm,
   },
-  timelineDot: {
-    position: 'absolute',
-    top: 20,
-    left: 8,
-    width: 9,
-    height: 9,
-    borderWidth: 2,
-    borderRadius: BorderRadius.full,
-  },
-  visitHeading: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.sm },
-  visitHeadingCopy: { flex: 1, minHeight: 44, justifyContent: 'center' },
-  visitDate: { fontFamily: FontFamily.semiBold, fontSize: FontSize.md, lineHeight: 22 },
-  estimatedDate: { marginTop: 2, fontFamily: FontFamily.regular, fontSize: FontSize.xs },
-  visitActions: { flexDirection: 'row' },
-  visitIconButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-  visitMetaRow: { marginTop: 2, flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.md },
-  visitMeta: { minHeight: 24, flexDirection: 'row', alignItems: 'center', gap: 5 },
-  visitMetaText: { fontFamily: FontFamily.medium, fontSize: FontSize.xs },
-  visitDetail: { marginTop: Spacing.sm, fontFamily: FontFamily.regular, fontSize: FontSize.sm, lineHeight: 21 },
-  visitDetailLabel: { fontFamily: FontFamily.semiBold },
-  visitNotes: { marginTop: Spacing.sm, fontFamily: FontFamily.regular, fontSize: FontSize.sm, lineHeight: 22 },
-  visitPhotos: { marginTop: Spacing.md, gap: Spacing.sm },
-  visitPhoto: { width: 104, height: 78, borderRadius: BorderRadius.md },
+  visitHeading: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  visitHeadingLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  visitDate: { fontFamily: FontFamily.bold, fontSize: FontSize.sm, letterSpacing: -0.2 },
+  visitRatingPill: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 6, paddingVertical: 2, borderRadius: BorderRadius.sm },
+  visitRatingText: { fontFamily: FontFamily.bold, fontSize: 11 },
+  visitActions: { flexDirection: 'row', gap: 2 },
+  visitIconButton: { width: 30, height: 30, alignItems: 'center', justifyContent: 'center' },
+  visitMetaInlineRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6, marginTop: 2 },
+  visitMetaInlineItem: { fontSize: FontSize.xs },
+  dishesInlineWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 7, marginTop: 6 },
+  dishItem: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 9, paddingVertical: 4, borderWidth: 1, borderRadius: BorderRadius.sm },
+  dishItemText: { fontSize: 11 },
+  visitSimpleNoteBox: { marginTop: 6, paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, borderWidth: 1, borderRadius: BorderRadius.md },
+  visitSimpleNote: { fontFamily: FontFamily.regular, fontSize: FontSize.xs + 1, lineHeight: 19 },
+  visitPhotos: { marginTop: 8, gap: 8 },
+  visitPhoto: { width: 80, height: 60, borderRadius: BorderRadius.md, borderWidth: 1 },
   emptyJournal: {
-    marginTop: Spacing.xl,
+    marginTop: Spacing.md,
     padding: Spacing.lg,
     borderRadius: BorderRadius.lg,
   },
-  emptyJournalTitle: { fontFamily: FontFamily.semiBold, fontSize: FontSize.md },
-  emptyJournalText: { marginTop: 5, fontFamily: FontFamily.regular, fontSize: FontSize.sm, lineHeight: 21 },
-  locationSection: { marginTop: Spacing.xxxl, padding: Spacing.lg, borderWidth: 1.5, borderRadius: 12 },
-  locationHeader: { minHeight: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: Spacing.md },
+  emptyJournalTitle: { fontFamily: FontFamily.semiBold, fontSize: FontSize.sm },
+  emptyJournalText: { marginTop: 4, fontFamily: FontFamily.regular, fontSize: FontSize.xs, lineHeight: 18 },
+  locationSection: {
+    marginTop: Spacing.xl,
+    padding: Spacing.lg,
+    borderWidth: 1,
+    borderRadius: BorderRadius.xl,
+  },
+  locationHeader: { minHeight: 40, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: Spacing.md },
   locationHeaderCopy: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
-  locationTitle: { fontFamily: FontFamily.semiBold, fontSize: FontSize.md },
-  locationAction: { minHeight: 44, paddingHorizontal: Spacing.sm, flexDirection: 'row', alignItems: 'center', gap: 4 },
+  locationTitle: { fontFamily: FontFamily.bold, fontSize: FontSize.md },
+  locationAction: { minHeight: 40, paddingHorizontal: Spacing.xs, flexDirection: 'row', alignItems: 'center', gap: 4 },
   locationActionText: { fontFamily: FontFamily.semiBold, fontSize: FontSize.xs },
-  detailMap: { width: '100%', height: 148, marginTop: Spacing.md, borderRadius: 10, overflow: 'hidden' },
-  detailMarker: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center', borderWidth: 3, borderRadius: 18 },
+  detailMap: { width: '100%', height: 140, marginTop: Spacing.md, borderRadius: BorderRadius.md, overflow: 'hidden' },
+  detailMarker: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderRadius: 16 },
   locationAddress: { marginTop: Spacing.sm, fontFamily: FontFamily.regular, fontSize: FontSize.xs, lineHeight: 18 },
-  listStatus: { minHeight: 64, marginTop: Spacing.xxxl, padding: Spacing.md, flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, borderWidth: 1.5, borderRadius: 12 },
+  listStatus: {
+    minHeight: 56,
+    marginTop: Spacing.xl,
+    padding: Spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    borderWidth: 1,
+    borderRadius: BorderRadius.xl,
+  },
   listStatusText: { flex: 1, fontFamily: FontFamily.medium, fontSize: FontSize.sm },
-  listManageButton: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 2 },
+  listManageButton: { minHeight: 40, flexDirection: 'row', alignItems: 'center', gap: 2 },
   listManageText: { fontFamily: FontFamily.semiBold, fontSize: FontSize.sm },
-  deleteAction: { minHeight: 52, marginTop: Spacing.xxl, paddingHorizontal: Spacing.xs, flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
+  deleteAction: { minHeight: 48, marginTop: Spacing.xl, paddingHorizontal: Spacing.xs, flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
   deleteText: { fontFamily: FontFamily.semiBold, fontSize: FontSize.sm },
   modalRoot: { flex: 1 },
   bottomSafeAreaFill: {
@@ -801,106 +1131,77 @@ const styles = StyleSheet.create({
     width: '100%',
     overflow: 'hidden',
   },
-  listModalBackdropShape: { position: 'absolute', overflow: 'hidden' },
-  listModalBackdropPink: {
-    top: 174,
-    right: -118,
-    width: 252,
-    height: 252,
-    borderRadius: 28,
-    transform: [{ rotate: '14deg' }],
-  },
-  listModalBackdropIndigo: {
-    bottom: 104,
-    left: -104,
-    width: 190,
-    height: 190,
-    borderRadius: 24,
-    transform: [{ rotate: '-18deg' }],
-  },
-  listModalBackdropStamp: {
-    position: 'absolute',
-    top: 360,
-    right: 28,
-    width: 74,
-    height: 74,
-    borderWidth: 2,
-    borderRadius: 18,
-    transform: [{ rotate: '-12deg' }],
-  },
   listModalHeader: {
-    minHeight: 108,
+    minHeight: 80,
     paddingHorizontal: Spacing.xl,
-    paddingTop: Spacing.lg,
-    paddingBottom: Spacing.lg,
+    paddingTop: Spacing.md,
+    paddingBottom: Spacing.md,
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: Spacing.md,
   },
   listModalHeaderIcon: {
-    width: 52,
-    height: 52,
+    width: 44,
+    height: 44,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1.5,
-    borderRadius: 12,
+    borderRadius: BorderRadius.md,
   },
   listModalHeaderCopy: { flex: 1, minWidth: 0 },
-  listModalTitle: { fontFamily: FontFamily.semiBold, fontSize: FontSize.xl, lineHeight: 29 },
-  listModalSubtitle: { marginTop: 4, fontFamily: FontFamily.regular, fontSize: FontSize.xs, lineHeight: 18 },
+  listModalTitle: { fontFamily: FontFamily.bold, fontSize: FontSize.xl, lineHeight: 28, letterSpacing: -0.3 },
+  listModalSubtitle: { marginTop: 2, fontFamily: FontFamily.regular, fontSize: FontSize.xs, lineHeight: 17 },
   listModalScroll: { flex: 1 },
-  listModalContent: { flexGrow: 1, paddingHorizontal: Spacing.xl, paddingTop: Spacing.lg, paddingBottom: Spacing.xl },
+  listModalContent: { flexGrow: 1, paddingHorizontal: Spacing.xl, paddingTop: Spacing.sm, paddingBottom: Spacing.xl },
   listModalSummary: {
-    minHeight: 68,
+    minHeight: 60,
     paddingHorizontal: Spacing.lg,
     paddingVertical: Spacing.md,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    borderWidth: 1.5,
-    borderRadius: 14,
+    borderWidth: 1,
+    borderRadius: BorderRadius.lg,
   },
   listModalSummaryCopy: { flex: 1, minWidth: 0 },
-  listModalSummaryHeading: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
+  listModalSummaryHeading: { flexDirection: 'row', alignItems: 'center', gap: Spacing.xs },
   listModalSummaryLabel: { fontFamily: FontFamily.semiBold, fontSize: FontSize.sm },
-  listModalSummaryDetail: { marginTop: 4, fontFamily: FontFamily.regular, fontSize: FontSize.xs },
+  listModalSummaryDetail: { marginTop: 2, fontFamily: FontFamily.regular, fontSize: FontSize.xs },
   listModalCount: {
-    minWidth: 40,
-    height: 40,
-    paddingHorizontal: Spacing.sm,
+    minWidth: 32,
+    height: 32,
+    paddingHorizontal: Spacing.xs,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1.5,
-    borderRadius: 12,
+    borderRadius: BorderRadius.sm,
   },
   listModalCountText: { fontFamily: FontFamily.bold, fontSize: FontSize.sm },
   collectionRow: {
-    minHeight: 84,
+    minHeight: 72,
     marginTop: Spacing.md,
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.sm,
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.md,
-    borderWidth: 1.5,
-    borderRadius: 14,
+    borderWidth: 1,
+    borderRadius: BorderRadius.lg,
   },
-  collectionIcon: { width: 52, height: 52, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderRadius: 12 },
+  collectionIcon: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', borderRadius: BorderRadius.md },
   collectionCopy: { flex: 1, minWidth: 0 },
-  collectionName: { fontFamily: FontFamily.semiBold, fontSize: FontSize.lg },
+  collectionName: { fontFamily: FontFamily.semiBold, fontSize: FontSize.md },
   collectionMeta: { marginTop: 2, fontFamily: FontFamily.regular, fontSize: FontSize.xs },
-  checkbox: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderRadius: 10 },
-  noListsPanel: { marginTop: Spacing.lg, padding: Spacing.xl, alignItems: 'center', borderWidth: 1.5, borderRadius: 12 },
+  checkbox: { width: 28, height: 28, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderRadius: BorderRadius.sm },
+  noListsPanel: { marginTop: Spacing.lg, padding: Spacing.xl, alignItems: 'center', borderWidth: 1, borderRadius: BorderRadius.lg },
   noListsTitle: { marginTop: Spacing.sm, fontFamily: FontFamily.semiBold, fontSize: FontSize.md },
   noLists: { marginTop: 4, fontFamily: FontFamily.regular, fontSize: FontSize.sm, lineHeight: 21, textAlign: 'center' },
   listModalFooter: { paddingTop: Spacing.md, paddingHorizontal: Spacing.xl },
-  listModalFooterHintRow: { minHeight: 36, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Spacing.sm },
+  listModalFooterHintRow: { minHeight: 32, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Spacing.xs },
   listModalFooterHint: { fontFamily: FontFamily.regular, fontSize: FontSize.xs, textAlign: 'center' },
-  listModalDone: { minHeight: 56, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderRadius: 12 },
-  listModalDoneText: { fontFamily: FontFamily.semiBold, fontSize: FontSize.md },
+  listModalDone: { minHeight: 48, alignItems: 'center', justifyContent: 'center', borderRadius: BorderRadius.button },
+  listModalDoneText: { fontFamily: FontFamily.bold, fontSize: FontSize.md, letterSpacing: 0.1 },
   galleryRoot: { flex: 1, justifyContent: 'center' },
   galleryTop: { position: 'absolute', left: Spacing.lg, right: Spacing.lg, flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
-  galleryCountBubble: { minWidth: 52, height: 32, paddingHorizontal: Spacing.md, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.48)', borderRadius: BorderRadius.full },
+  galleryCountBubble: { minWidth: 52, height: 32, paddingHorizontal: Spacing.md, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.48)', borderRadius: BorderRadius.sm },
   galleryCount: { color: '#FFFFFF', fontFamily: FontFamily.semiBold, fontSize: FontSize.xs, textAlign: 'center' },
-  galleryClose: { position: 'absolute', right: 0, width: 44, height: 44, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.48)', borderRadius: BorderRadius.full },
+  galleryClose: { position: 'absolute', right: 0, width: 40, height: 40, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.48)', borderRadius: BorderRadius.sm },
 });

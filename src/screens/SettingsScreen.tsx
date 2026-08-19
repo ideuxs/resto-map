@@ -1,6 +1,7 @@
 import React from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import * as Haptics from 'expo-haptics';
 import {
   Check,
   LockKeyhole,
@@ -16,12 +17,12 @@ import { BorderRadius, FontFamily, FontSize, Shadows, Spacing } from '../constan
 
 const APPEARANCE_OPTIONS: { value: ColorScheme; label: string; detail: string; icon: typeof Monitor }[] = [
   { value: 'system', label: 'Système', detail: 'Suit le réglage de votre iPhone', icon: Monitor },
-  { value: 'light', label: 'Clair', detail: 'Fond lavande lumineux', icon: Sun },
-  { value: 'dark', label: 'Sombre', detail: 'Indigo profond, sans noir pur', icon: Moon },
+  { value: 'light', label: 'Clair', detail: 'Fond crème et aubergine chaleureux', icon: Sun },
+  { value: 'dark', label: 'Sombre', detail: 'Aubergine profond, sans noir pur', icon: Moon },
 ];
 
 export default function SettingsScreen() {
-  const { colors, colorScheme, setTheme } = useTheme();
+  const { colors, colorScheme, isDark, setTheme } = useTheme();
   const insets = useSafeAreaInsets();
 
   return (
@@ -37,42 +38,54 @@ export default function SettingsScreen() {
       />
 
       <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Apparence</Text>
-      <View style={[styles.section, Shadows.hard, { backgroundColor: colors.surface, borderColor: colors.textPrimary }]}>
+      <View style={[styles.section, Shadows.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         {APPEARANCE_OPTIONS.map((option, index) => {
           const Icon = option.icon;
           const selected = colorScheme === option.value;
           return (
-            <Pressable
-              key={option.value}
-              onPress={() => setTheme(option.value)}
-              accessibilityRole="radio"
-              accessibilityState={{ selected }}
-              style={({ pressed }) => [styles.option, { opacity: pressed ? 0.62 : 1 }]}
-            >
-              <View style={[styles.optionIcon, { backgroundColor: selected ? `${colors.primary}18` : colors.surfaceLight }]}>
-                <Icon size={19} color={selected ? colors.primary : colors.textMuted} />
-              </View>
-              <View style={styles.optionCopy}>
-                <Text style={[styles.optionTitle, { color: selected ? colors.primary : colors.textPrimary }]}>{option.label}</Text>
-                <Text style={[styles.optionDetail, { color: colors.textMuted }]}>{option.detail}</Text>
-              </View>
-              {selected ? <Check size={20} color={colors.primary} strokeWidth={2.5} /> : null}
-            </Pressable>
+            <React.Fragment key={option.value}>
+              <Pressable
+                onPress={() => {
+                  Haptics.selectionAsync().catch(() => undefined);
+                  setTheme(option.value);
+                }}
+                accessibilityRole="radio"
+                accessibilityState={{ selected }}
+                style={({ pressed }) => [
+                  styles.option,
+                  {
+                    transform: [{ scale: pressed ? 0.985 : 1 }],
+                    opacity: pressed ? 0.75 : 1,
+                  },
+                ]}
+              >
+                <View style={[styles.optionIcon, { backgroundColor: selected ? (isDark ? colors.surfaceAubergine : `${colors.primary}15`) : (isDark ? colors.surfaceLight : colors.surfaceLight) }]}>
+                  <Icon size={18} color={selected ? colors.primary : colors.textMuted} />
+                </View>
+                <View style={styles.optionCopy}>
+                  <Text style={[styles.optionTitle, { color: selected ? colors.primary : colors.textPrimary }]}>{option.label}</Text>
+                  <Text style={[styles.optionDetail, { color: colors.textMuted }]}>{option.detail}</Text>
+                </View>
+                {selected ? <Check size={18} color={colors.primary} strokeWidth={2.5} /> : null}
+              </Pressable>
+              {index < APPEARANCE_OPTIONS.length - 1 ? <View style={[styles.divider, { backgroundColor: colors.border }]} /> : null}
+            </React.Fragment>
           );
         })}
       </View>
 
       <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Confidentialité</Text>
-      <View style={[styles.section, Shadows.hard, { backgroundColor: colors.surface, borderColor: colors.textPrimary }]}>
+      <View style={[styles.section, Shadows.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <View style={styles.infoRow}>
-          <View style={[styles.optionIcon, { backgroundColor: colors.surfaceLight }]}><LockKeyhole size={19} color={colors.lavender} /></View>
+          <View style={[styles.optionIcon, { backgroundColor: isDark ? colors.surfaceLight : colors.surfaceLight }]}><LockKeyhole size={18} color={colors.lavender} /></View>
           <View style={styles.optionCopy}>
             <Text style={[styles.optionTitle, { color: colors.textPrimary }]}>Journal privé</Text>
             <Text style={[styles.optionDetail, { color: colors.textMuted }]}>Vos visites, notes et photos restent sur cet appareil.</Text>
           </View>
         </View>
+        <View style={[styles.divider, { backgroundColor: colors.border }]} />
         <View style={styles.infoRow}>
-          <View style={[styles.optionIcon, { backgroundColor: colors.surfaceLight }]}><ShieldCheck size={19} color={colors.accentGreen} /></View>
+          <View style={[styles.optionIcon, { backgroundColor: isDark ? colors.surfaceLight : colors.surfaceLight }]}><ShieldCheck size={18} color={colors.success} /></View>
           <View style={styles.optionCopy}>
             <Text style={[styles.optionTitle, { color: colors.textPrimary }]}>Partages ciblés</Text>
             <Text style={[styles.optionDetail, { color: colors.textMuted }]}>Seules les listes que vous partagez volontairement peuvent être exportées.</Text>
@@ -88,13 +101,14 @@ export default function SettingsScreen() {
 const styles = StyleSheet.create({
   screen: { flex: 1 },
   header: { paddingTop: 2, paddingBottom: Spacing.xs },
-  sectionTitle: { marginTop: Spacing.lg, marginBottom: Spacing.sm, fontFamily: FontFamily.bold, fontSize: FontSize.lg },
-  section: { borderWidth: 1.5, borderRadius: 12 },
-  option: { minHeight: 64, padding: Spacing.md, flexDirection: 'row', alignItems: 'center', gap: Spacing.md },
-  infoRow: { minHeight: 68, padding: Spacing.md, flexDirection: 'row', alignItems: 'center', gap: Spacing.md },
-  optionIcon: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center', borderRadius: BorderRadius.md },
+  sectionTitle: { marginTop: Spacing.xl, marginBottom: Spacing.xs, fontFamily: FontFamily.bold, fontSize: FontSize.md, letterSpacing: -0.2 },
+  section: { borderWidth: 1, borderRadius: BorderRadius.xl, overflow: 'hidden' },
+  option: { minHeight: 60, padding: Spacing.md, flexDirection: 'row', alignItems: 'center', gap: Spacing.md },
+  infoRow: { minHeight: 64, padding: Spacing.md, flexDirection: 'row', alignItems: 'center', gap: Spacing.md },
+  optionIcon: { width: 38, height: 38, alignItems: 'center', justifyContent: 'center', borderRadius: BorderRadius.md },
   optionCopy: { flex: 1, minWidth: 0 },
   optionTitle: { fontFamily: FontFamily.semiBold, fontSize: FontSize.md },
-  optionDetail: { marginTop: 3, fontFamily: FontFamily.regular, fontSize: FontSize.xs, lineHeight: 18 },
+  optionDetail: { marginTop: 2, fontFamily: FontFamily.regular, fontSize: FontSize.xs, lineHeight: 17 },
+  divider: { height: 1, marginLeft: 56 },
   version: { marginTop: Spacing.huge, textAlign: 'center', fontFamily: FontFamily.regular, fontSize: FontSize.xs },
 });
