@@ -46,7 +46,7 @@ type Props = NativeStackScreenProps<RestaurantsStackParamList, 'Home'>;
 type SourceFilter = 'all' | 'personal' | 'friends';
 
 export default function RestaurantListScreen({ navigation }: Props) {
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const { width, fontScale } = useWindowDimensions();
   const compactControls = width < 360 || fontScale > 1.3;
@@ -124,7 +124,7 @@ export default function RestaurantListScreen({ navigation }: Props) {
   };
 
   const header = (
-    <View style={[styles.header, { paddingTop: insets.top + Spacing.lg }]}>
+    <View style={[styles.header, { paddingTop: insets.top + Spacing.md }]}>
       <ScreenHeader
         title="Restos"
         subtitle="Toutes les adresses au même endroit"
@@ -133,23 +133,25 @@ export default function RestaurantListScreen({ navigation }: Props) {
         showAdd={restaurants.length > 0}
       />
 
-      <View style={[styles.stats, Shadows.hard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+      <View style={[styles.statsCard, Shadows.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <View style={styles.stat}>
-          <Text style={[styles.statValue, { color: colors.textPrimary }]}>{restaurants.length}</Text>
+          <Text style={[styles.statValue, { color: isDark ? '#FAF8FC' : colors.primary }]}>{restaurants.length}</Text>
           <Text style={[styles.statLabel, { color: colors.textMuted }]}>adresses</Text>
         </View>
+        <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
         <View style={styles.stat}>
-          <Text style={[styles.statValue, { color: colors.textPrimary }]}>{average ? average.toFixed(1) : '—'}</Text>
+          <Text style={[styles.statValue, { color: isDark ? '#FAF8FC' : colors.primary }]}>{average ? average.toFixed(1) : '—'}</Text>
           <Text style={[styles.statLabel, { color: colors.textMuted }]}>moyenne</Text>
         </View>
+        <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
         <View style={styles.stat}>
-          <Text style={[styles.statValue, { color: colors.friendText }]}>{importedShare}%</Text>
+          <Text style={[styles.statValue, { color: isDark ? '#FAF8FC' : colors.primary }]}>{importedShare}%</Text>
           <Text style={[styles.statLabel, { color: colors.textMuted }]}>des amis</Text>
         </View>
       </View>
 
-      <View style={[styles.search, Shadows.hard, { backgroundColor: colors.surface, borderColor: colors.textPrimary }]}>
-        <Search size={19} color={colors.textMuted} />
+      <View style={[styles.search, Shadows.hairline, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <Search size={18} color={colors.textMuted} />
         <TextInput
           value={query}
           onChangeText={setQuery}
@@ -173,7 +175,8 @@ export default function RestaurantListScreen({ navigation }: Props) {
         style={[
           styles.sourceTabs,
           compactControls && styles.sourceTabsCompact,
-          { backgroundColor: colors.surfaceMuted, borderColor: colors.textPrimary, borderWidth: 1.5 },
+          Shadows.card,
+          { backgroundColor: colors.surface, borderColor: colors.border },
         ]}
       >
         {([
@@ -191,11 +194,28 @@ export default function RestaurantListScreen({ navigation }: Props) {
               style={({ pressed }) => [
                 styles.sourceTab,
                 compactControls && styles.sourceTabCompact,
-                selected && { backgroundColor: colors.surface, borderColor: colors.textPrimary, borderWidth: 1.5 },
-                { opacity: pressed ? 0.65 : 1 },
+                selected && [
+                  Shadows.hairline,
+                  {
+                    backgroundColor: isDark ? '#4A154B' : `${colors.primary}12`,
+                    borderColor: isDark ? '#6B2370' : colors.primary,
+                    borderWidth: 1,
+                  },
+                ],
+                { opacity: pressed ? 0.7 : 1 },
               ]}
             >
-              <Text style={[styles.sourceTabText, { color: selected ? colors.textPrimary : colors.textMuted }]}>{label}</Text>
+              <Text
+                style={[
+                  styles.sourceTabText,
+                  {
+                    color: selected ? (isDark ? '#FFFFFF' : colors.primary) : colors.textMuted,
+                    fontFamily: selected ? FontFamily.bold : FontFamily.medium,
+                  },
+                ]}
+              >
+                {label}
+              </Text>
             </Pressable>
           );
         })}
@@ -209,14 +229,35 @@ export default function RestaurantListScreen({ navigation }: Props) {
           <Pressable
             onPress={openRandom}
             disabled={!filtered.length}
-            style={({ pressed }) => [styles.textAction, { opacity: !filtered.length ? 0.35 : pressed ? 0.55 : 1 }]}
+            style={({ pressed }) => [
+              styles.textAction,
+              Shadows.hairline,
+              {
+                backgroundColor: colors.surface,
+                borderColor: colors.border,
+                opacity: !filtered.length ? 0.35 : pressed ? 0.65 : 1,
+              },
+            ]}
           >
-            <Shuffle size={16} color={colors.textSecondary} />
-            <Text style={[styles.textActionLabel, { color: colors.textSecondary }]}>Choisir</Text>
+            <Shuffle size={15} color={colors.primary} />
+            <Text style={[styles.textActionLabel, { color: colors.primary }]}>Choisir</Text>
           </Pressable>
-          <Pressable onPress={() => setFiltersOpen(true)} style={({ pressed }) => [styles.textAction, { opacity: pressed ? 0.55 : 1 }]}>
-            {advancedCount ? <Filter size={16} color={colors.accent} /> : <SlidersHorizontal size={16} color={colors.textSecondary} />}
-            <Text style={[styles.textActionLabel, { color: advancedCount ? colors.accent : colors.textSecondary }]}>Filtres{advancedCount ? ` · ${advancedCount}` : ''}</Text>
+          <Pressable
+            onPress={() => setFiltersOpen(true)}
+            style={({ pressed }) => [
+              styles.textAction,
+              Shadows.hairline,
+              {
+                backgroundColor: advancedCount ? (isDark ? colors.surfaceAubergine : colors.surfaceLight) : colors.surface,
+                borderColor: advancedCount ? colors.primary : colors.border,
+                opacity: pressed ? 0.65 : 1,
+              },
+            ]}
+          >
+            {advancedCount ? <Filter size={15} color={colors.primary} /> : <SlidersHorizontal size={15} color={colors.textSecondary} />}
+            <Text style={[styles.textActionLabel, { color: advancedCount ? colors.primary : colors.textSecondary }]}>
+              Filtres{advancedCount ? ` · ${advancedCount}` : ''}
+            </Text>
           </Pressable>
         </View>
       </View>
@@ -252,7 +293,7 @@ export default function RestaurantListScreen({ navigation }: Props) {
         <StatusBar style="light" />
         <View style={[styles.modalRoot, { backgroundColor: colors.overlay }]}>
           <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setFiltersOpen(false)} />
-          <View style={[styles.sheet, Shadows.sheet, { backgroundColor: colors.surface, borderColor: colors.textPrimary }]}>
+          <View style={[styles.sheet, Shadows.sheet, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <View style={[styles.sheetHandle, { backgroundColor: colors.border }]} />
             <View style={styles.sheetHeader}>
               <View style={styles.sheetHeaderCopy}>
@@ -260,7 +301,7 @@ export default function RestaurantListScreen({ navigation }: Props) {
                 <Text style={[styles.sheetSubtitle, { color: colors.textMuted }]}>Les filtres s’appliquent immédiatement.</Text>
               </View>
               <Pressable onPress={() => setFiltersOpen(false)} accessibilityLabel="Fermer" style={styles.closeButton}>
-                <X size={22} color={colors.textPrimary} />
+                <X size={20} color={colors.textPrimary} />
               </Pressable>
             </View>
             <ScrollView style={[styles.filterScroll, { backgroundColor: colors.surface }]} showsVerticalScrollIndicator={false} contentContainerStyle={styles.filterContent}>
@@ -282,7 +323,7 @@ export default function RestaurantListScreen({ navigation }: Props) {
               </ScrollView>
 
               <Text style={[styles.sectionLabel, { color: colors.textPrimary }]}>Préférences</Text>
-              <View style={[styles.preferenceList, Shadows.hard, { backgroundColor: colors.surface, borderColor: colors.textPrimary }]}>
+              <View style={[styles.preferenceList, Shadows.hairline, { backgroundColor: isDark ? colors.surfaceLight : colors.background, borderColor: colors.border }]}>
                 <PreferenceRow label="Avec photos" selected={photosOnly} onPress={() => setPhotosOnly(!photosOnly)} />
                 <PreferenceRow label="À refaire" selected={revisitOnly} onPress={() => setRevisitOnly(!revisitOnly)} />
                 <PreferenceRow label="Notées 4+" selected={minRating === 4} onPress={() => setMinRating(minRating === 4 ? null : 4)} />
@@ -297,11 +338,11 @@ export default function RestaurantListScreen({ navigation }: Props) {
               </ScrollView>
             </ScrollView>
             <View style={[styles.filterFooter, compactControls && styles.filterFooterCompact, { backgroundColor: colors.surface, paddingBottom: insets.bottom + Spacing.md }]}>
-              <Pressable onPress={resetAdvanced} style={({ pressed }) => [styles.secondaryButton, { borderColor: colors.border, opacity: pressed ? 0.55 : 1 }]}>
+              <Pressable onPress={resetAdvanced} style={({ pressed }) => [styles.secondaryButton, { borderColor: colors.border, backgroundColor: isDark ? colors.surfaceLight : colors.background, opacity: pressed ? 0.65 : 1 }]}>
                 <Text style={[styles.secondaryButtonText, { color: colors.textPrimary }]}>Réinitialiser</Text>
               </Pressable>
-              <Pressable onPress={() => setFiltersOpen(false)} style={({ pressed }) => [styles.applyButton, { backgroundColor: colors.accent, opacity: pressed ? 0.72 : 1 }]}>
-                <Text style={[styles.applyText, { color: colors.textOnAccent }]}>Voir {filtered.length} adresse{filtered.length !== 1 ? 's' : ''}</Text>
+              <Pressable onPress={() => setFiltersOpen(false)} style={({ pressed }) => [styles.applyButton, Shadows.card, { backgroundColor: colors.primary, opacity: pressed ? 0.78 : 1 }]}>
+                <Text style={[styles.applyText, { color: colors.textOnPrimary }]}>Voir {filtered.length} adresse{filtered.length !== 1 ? 's' : ''}</Text>
               </Pressable>
             </View>
           </View>
@@ -319,13 +360,15 @@ export default function RestaurantListScreen({ navigation }: Props) {
         style={({ pressed }) => [
           styles.option,
           {
-            backgroundColor: selected ? `${colors.accent}18` : colors.surfaceLight,
-            borderColor: selected ? colors.accent : colors.textPrimary,
-            opacity: pressed ? 0.62 : 1,
+            backgroundColor: selected ? (isDark ? colors.surfaceAubergine : `${colors.primary}18`) : (isDark ? colors.surfaceLight : colors.background),
+            borderColor: selected ? colors.primary : colors.border,
+            opacity: pressed ? 0.68 : 1,
           },
         ]}
       >
-        <Text style={[styles.optionText, { color: selected ? colors.accent : colors.textPrimary }]}>{label}</Text>
+        <Text style={[styles.optionText, { color: selected ? (isDark ? '#FFFFFF' : colors.primary) : colors.textPrimary, fontFamily: selected ? FontFamily.bold : FontFamily.medium }]}>
+          {label}
+        </Text>
       </Pressable>
     );
   }
@@ -336,11 +379,19 @@ export default function RestaurantListScreen({ navigation }: Props) {
         onPress={onPress}
         accessibilityRole="checkbox"
         accessibilityState={{ checked: selected }}
-        style={({ pressed }) => [styles.preferenceRow, { opacity: pressed ? 0.62 : 1 }]}
+        style={({ pressed }) => [styles.preferenceRow, { opacity: pressed ? 0.68 : 1 }]}
       >
         <Text style={[styles.preferenceLabel, { color: colors.textPrimary }]}>{label}</Text>
-        <View style={[styles.preferenceMark, { borderColor: selected ? colors.accent : colors.border, backgroundColor: selected ? colors.accent : 'transparent' }]}>
-          {selected ? <Check size={14} color={colors.textOnAccent} strokeWidth={3} /> : null}
+        <View
+          style={[
+            styles.preferenceMark,
+            {
+              borderColor: selected ? colors.primary : colors.border,
+              backgroundColor: selected ? colors.primary : 'transparent',
+            },
+          ]}
+        >
+          {selected ? <Check size={13} color={colors.textOnPrimary} strokeWidth={3} /> : null}
         </View>
       </Pressable>
     );
@@ -349,49 +400,89 @@ export default function RestaurantListScreen({ navigation }: Props) {
 
 const styles = StyleSheet.create({
   screen: { flex: 1 },
-  header: { paddingHorizontal: Spacing.lg, paddingBottom: Spacing.lg },
-  stats: { marginTop: Spacing.xxl, padding: Spacing.lg, flexDirection: 'row', borderWidth: 1.5, borderRadius: 12 },
-  stat: { flex: 1, alignItems: 'center' },
-  statValue: { fontFamily: FontFamily.semiBold, fontSize: FontSize.lg },
-  statLabel: { marginTop: 2, fontFamily: FontFamily.regular, fontSize: FontSize.xs },
-  search: { minHeight: 52, marginTop: Spacing.xl, paddingHorizontal: Spacing.md, flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, borderWidth: 1.5, borderRadius: 10 },
-  searchInput: { flex: 1, minHeight: 46, fontFamily: FontFamily.regular, fontSize: FontSize.md },
-  sourceTabs: { marginTop: Spacing.md, padding: 4, flexDirection: 'row', borderRadius: 8 },
+  header: { paddingHorizontal: Spacing.lg, paddingBottom: Spacing.md },
+  statsCard: {
+    marginTop: Spacing.lg,
+    paddingVertical: Spacing.lg + 2,
+    paddingHorizontal: Spacing.lg,
+    minHeight: 84,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-around',
+    borderWidth: 1,
+    borderRadius: BorderRadius.xl,
+  },
+  stat: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  statDivider: { width: 1, height: 38 },
+  statValue: { fontFamily: FontFamily.bold, fontSize: 25, letterSpacing: -0.6, lineHeight: 29 },
+  statLabel: { marginTop: 4, fontFamily: FontFamily.medium, fontSize: FontSize.xs },
+  search: {
+    minHeight: 48,
+    marginTop: Spacing.md,
+    paddingHorizontal: Spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    borderWidth: 1,
+    borderRadius: BorderRadius.md,
+  },
+  searchInput: { flex: 1, minHeight: 44, fontFamily: FontFamily.regular, fontSize: FontSize.md },
+  sourceTabs: {
+    marginTop: Spacing.sm,
+    padding: 3,
+    flexDirection: 'row',
+    borderWidth: 1,
+    borderRadius: BorderRadius.md,
+  },
   sourceTabsCompact: { flexDirection: 'column' },
-  sourceTab: { flex: 1, minHeight: 44, paddingHorizontal: 4, alignItems: 'center', justifyContent: 'center', borderRadius: 5 },
+  sourceTab: {
+    flex: 1,
+    minHeight: 36,
+    paddingHorizontal: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: BorderRadius.sm,
+  },
   sourceTabCompact: { flex: 0, width: '100%' },
-  sourceTabText: { fontFamily: FontFamily.semiBold, fontSize: FontSize.xs, textAlign: 'center' },
-  resultRow: { minHeight: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  resultRowCompact: { minHeight: 76, paddingVertical: Spacing.xs, flexDirection: 'column', alignItems: 'stretch', justifyContent: 'center' },
+  sourceTabText: { fontSize: FontSize.xs, textAlign: 'center' },
+  resultRow: { minHeight: 44, marginTop: Spacing.xs, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  resultRowCompact: { minHeight: 72, paddingVertical: Spacing.xs, flexDirection: 'column', alignItems: 'stretch', justifyContent: 'center' },
   resultText: { fontFamily: FontFamily.medium, fontSize: FontSize.xs },
-  inlineActions: { flexDirection: 'row', alignItems: 'center', gap: Spacing.lg },
+  inlineActions: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
   inlineActionsCompact: { alignSelf: 'stretch', justifyContent: 'flex-end' },
-  textAction: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 6 },
+  textAction: {
+    minHeight: 34,
+    paddingHorizontal: Spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderWidth: 1,
+    borderRadius: BorderRadius.md,
+  },
   textActionLabel: { fontFamily: FontFamily.semiBold, fontSize: FontSize.xs },
   modalRoot: { flex: 1, justifyContent: 'flex-end' },
-  sheet: { height: '88%', overflow: 'hidden', paddingTop: Spacing.sm, borderTopLeftRadius: 18, borderTopRightRadius: 18, borderWidth: 1.5 },
-  sheetHandle: { width: 36, height: 4, alignSelf: 'center', marginBottom: Spacing.md, borderRadius: BorderRadius.full },
-  sheetHeader: { minHeight: 52, marginBottom: Spacing.sm, paddingHorizontal: Spacing.xl, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: Spacing.md },
+  sheet: { height: '86%', overflow: 'hidden', paddingTop: Spacing.sm, borderTopLeftRadius: BorderRadius.xxl, borderTopRightRadius: BorderRadius.xxl, borderWidth: 1 },
+  sheetHandle: { width: 36, height: 4, alignSelf: 'center', marginBottom: Spacing.sm, borderRadius: 2 },
+  sheetHeader: { minHeight: 48, marginBottom: Spacing.xs, paddingHorizontal: Spacing.xl, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: Spacing.md },
   sheetHeaderCopy: { flex: 1 },
-  sheetTitle: { fontFamily: FontFamily.semiBold, fontSize: FontSize.xl },
-  sheetSubtitle: { marginTop: 3, fontFamily: FontFamily.regular, fontSize: FontSize.xs },
-  closeButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  sheetTitle: { fontFamily: FontFamily.bold, fontSize: FontSize.xl, letterSpacing: -0.3 },
+  sheetSubtitle: { marginTop: 2, fontFamily: FontFamily.regular, fontSize: FontSize.xs },
+  closeButton: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
   filterScroll: { flex: 1 },
-  filterContent: { paddingHorizontal: Spacing.xl, paddingBottom: 0 },
-  sectionLabel: { marginTop: Spacing.lg, marginBottom: 3, fontFamily: FontFamily.semiBold, fontSize: FontSize.sm },
+  filterContent: { paddingHorizontal: Spacing.xl, paddingBottom: Spacing.md },
+  sectionLabel: { marginTop: Spacing.lg, marginBottom: 2, fontFamily: FontFamily.semiBold, fontSize: FontSize.sm },
   selectionHint: { fontFamily: FontFamily.regular, fontSize: FontSize.xs },
   horizontalOptions: { paddingVertical: Spacing.sm, paddingRight: Spacing.xl, gap: Spacing.sm },
-  option: { minHeight: 44, paddingHorizontal: Spacing.md, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderRadius: 8 },
-  optionText: { fontFamily: FontFamily.medium, fontSize: FontSize.xs },
-  preferenceList: { marginTop: Spacing.sm, padding: Spacing.sm, borderWidth: 1.5, borderRadius: 10 },
-  preferenceRow: { minHeight: 48, paddingHorizontal: Spacing.sm, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderRadius: BorderRadius.md },
+  option: { minHeight: 40, paddingHorizontal: Spacing.md, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderRadius: BorderRadius.md },
+  optionText: { fontSize: FontSize.xs },
+  preferenceList: { marginTop: Spacing.sm, padding: Spacing.xs, borderWidth: 1, borderRadius: BorderRadius.lg },
+  preferenceRow: { minHeight: 46, paddingHorizontal: Spacing.sm, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderRadius: BorderRadius.md },
   preferenceLabel: { fontFamily: FontFamily.medium, fontSize: FontSize.sm },
-  preferenceMark: { width: 22, height: 22, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderRadius: 11 },
-  preferenceCheck: { fontFamily: FontFamily.bold, fontSize: 14, lineHeight: 17 },
-  filterFooter: { marginTop: -1, paddingHorizontal: Spacing.xl, paddingTop: Spacing.md, flexDirection: 'row', gap: Spacing.sm, shadowOpacity: 0, elevation: 0 },
+  preferenceMark: { width: 20, height: 20, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderRadius: BorderRadius.sm },
+  filterFooter: { paddingHorizontal: Spacing.xl, paddingTop: Spacing.md, flexDirection: 'row', gap: Spacing.sm },
   filterFooterCompact: { flexDirection: 'column' },
-  secondaryButton: { minHeight: 50, paddingHorizontal: Spacing.lg, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderRadius: BorderRadius.md },
+  secondaryButton: { minHeight: 48, paddingHorizontal: Spacing.lg, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderRadius: BorderRadius.button },
   secondaryButtonText: { fontFamily: FontFamily.semiBold, fontSize: FontSize.sm },
-  applyButton: { flex: 1, minHeight: 50, alignItems: 'center', justifyContent: 'center', borderRadius: BorderRadius.md },
-  applyText: { fontFamily: FontFamily.semiBold, fontSize: FontSize.sm },
+  applyButton: { flex: 1, minHeight: 48, alignItems: 'center', justifyContent: 'center', borderRadius: BorderRadius.button },
+  applyText: { fontFamily: FontFamily.bold, fontSize: FontSize.sm, letterSpacing: 0.1 },
 });

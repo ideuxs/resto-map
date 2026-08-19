@@ -2,7 +2,7 @@ import React from 'react';
 import { StyleProp, StyleSheet, Text, View, ViewStyle } from 'react-native';
 import { Restaurant } from '../types';
 import { CATEGORIES } from '../constants/categories';
-import { FontFamily, getSourceColor, isSourceColorKey, Shadows, sourceColorKeyFor } from '../constants/theme';
+import { FontFamily, getSourceColor, isSourceColorKey, sourceColorKeyFor } from '../constants/theme';
 import { useTheme } from '../theme/ThemeProvider';
 
 type Props = {
@@ -34,31 +34,22 @@ export default function PlaceArtwork({ restaurant, style, compact = false }: Pro
     : category.color;
   const flattenedStyle = StyleSheet.flatten(style) || {};
   const surfaceRadius = typeof flattenedStyle.borderRadius === 'number' ? flattenedStyle.borderRadius : 12;
-  const surfaceBorderWidth = flattenedStyle.borderWidth === 0 ? 0 : 1.5;
 
   return (
     <View
       style={[
         styles.container,
+        {
+          borderRadius: surfaceRadius,
+          backgroundColor: isDark ? colors.surfaceLight : `${sourceColor}15`,
+          borderColor: isDark ? colors.border : `${sourceColor}30`,
+        },
         style,
       ]}
       accessibilityLabel={`Illustration ${category.label} pour ${restaurant.name}`}
     >
-      <View
-        pointerEvents="none"
-        style={[
-          StyleSheet.absoluteFillObject,
-          Shadows.hard,
-          {
-            backgroundColor: `${sourceColor}20`,
-            borderColor: colors.textPrimary,
-            borderWidth: surfaceBorderWidth,
-            borderRadius: surfaceRadius,
-          },
-        ]}
-      />
-      <Icon size={compact ? 20 : 28} color={sourceColor} strokeWidth={1.8} />
-      <Text style={[styles.initials, compact && styles.initialsCompact, { color: sourceColor }]}>
+      <Icon size={compact ? 20 : 26} color={isDark ? colors.lavender : sourceColor} strokeWidth={1.8} />
+      <Text style={[styles.initials, compact && styles.initialsCompact, { color: isDark ? colors.textPrimary : sourceColor }]}>
         {initials(restaurant.name)}
       </Text>
     </View>
@@ -67,19 +58,18 @@ export default function PlaceArtwork({ restaurant, style, compact = false }: Pro
 
 const styles = StyleSheet.create({
   container: {
-    position: 'relative',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 1,
   },
   initials: {
-    marginTop: 7,
+    marginTop: 4,
     fontFamily: FontFamily.bold,
-    fontSize: 18,
-    letterSpacing: -0.5,
+    fontSize: 16,
+    letterSpacing: -0.4,
   },
   initialsCompact: {
-    marginTop: 3,
-    fontSize: 14,
+    marginTop: 2,
+    fontSize: 13,
   },
 });

@@ -40,7 +40,7 @@ import { PRICE_BANDS, priceBandBounds, priceBandForRestaurant } from '../domain/
 type Props = NativeStackScreenProps<RestaurantsStackParamList, 'AddRestaurant'>;
 
 export default function AddRestaurantScreen({ route, navigation }: Props) {
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const editing = route.params?.restaurant;
   const initialCollectionId = route.params?.collectionId;
@@ -50,6 +50,7 @@ export default function AddRestaurantScreen({ route, navigation }: Props) {
   const [address, setAddress] = useState(editing?.address || '');
   const [coordinates, setCoordinates] = useState(editing?.location);
   const [priceBand, setPriceBand] = useState<PriceBand | null>(() => editing ? priceBandForRestaurant(editing) : null);
+  const [signatureDish, setSignatureDish] = useState(editing?.signatureDish || '');
   const [description, setDescription] = useState(editing?.description || '');
   const [tagsText, setTagsText] = useState((editing?.tags || []).join(', '));
   const [images, setImages] = useState<string[]>(editing?.images || []);
@@ -137,6 +138,7 @@ export default function AddRestaurantScreen({ route, navigation }: Props) {
         priceBand: priceBand || undefined,
         priceMin: priceBand ? priceBandBounds(priceBand)?.min : undefined,
         priceMax: priceBand ? priceBandBounds(priceBand)?.max : undefined,
+        signatureDish: signatureDish.trim() || undefined,
         description: description.trim() || undefined,
         tags: tagsText.split(',').map((tag) => tag.trim()).filter(Boolean).slice(0, 8),
         images,
@@ -156,24 +158,24 @@ export default function AddRestaurantScreen({ route, navigation }: Props) {
 
   return (
     <KeyboardAvoidingView style={[styles.screen, { backgroundColor: colors.background }]} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <View style={[styles.topBar, { paddingTop: insets.top, borderColor: colors.border }]}>
+      <View style={[styles.topBar, { paddingTop: insets.top }]}>
         <Pressable
           onPress={() => step === 2 ? setStep(1) : navigation.goBack()}
           accessibilityLabel={step === 2 ? 'Revenir à l’étape précédente' : 'Fermer'}
           style={styles.topAction}
         >
-          <ArrowLeft size={23} color={colors.textPrimary} />
+          <ArrowLeft size={22} color={colors.textPrimary} />
         </Pressable>
         <View style={styles.topCopy}>
           <Text style={[styles.topTitle, { color: colors.textPrimary }]}>{editing ? 'Modifier l’adresse' : 'Ajouter une adresse'}</Text>
           <Text style={[styles.stepText, { color: colors.textMuted }]}>{step} sur 2 · {step === 1 ? 'Essentiel' : 'Détails facultatifs'}</Text>
         </View>
         <Pressable onPress={() => navigation.goBack()} accessibilityLabel="Annuler" style={styles.topAction}>
-          <X size={22} color={colors.textPrimary} />
+          <X size={20} color={colors.textPrimary} />
         </Pressable>
       </View>
-      <View style={[styles.progressTrack, { backgroundColor: colors.surfaceMuted }]}>
-        <View style={[styles.progressValue, { width: step === 1 ? '50%' : '100%', backgroundColor: colors.accent }]} />
+      <View style={[styles.progressTrack, { backgroundColor: colors.border }]}>
+        <View style={[styles.progressValue, { width: step === 1 ? '50%' : '100%', backgroundColor: colors.primary }]} />
       </View>
 
       <ScrollView
@@ -199,7 +201,14 @@ export default function AddRestaurantScreen({ route, navigation }: Props) {
               placeholderTextColor={colors.textMuted}
               selectionColor={colors.accent}
               accessibilityLabel="Nom du restaurant"
-              style={[styles.input, Shadows.hard, { backgroundColor: colors.surface, borderColor: nameTouched && !name.trim() ? colors.danger : colors.textPrimary, color: colors.textPrimary }]}
+              style={[
+                styles.input,
+                {
+                  backgroundColor: colors.surface,
+                  borderColor: nameTouched && !name.trim() ? colors.danger : colors.border,
+                  color: colors.textPrimary,
+                },
+              ]}
             />
             {nameTouched && !name.trim() ? <Text style={[styles.error, { color: colors.danger }]}>Le nom est nécessaire pour continuer.</Text> : null}
 
@@ -216,28 +225,35 @@ export default function AddRestaurantScreen({ route, navigation }: Props) {
                     accessibilityState={{ selected }}
                     style={({ pressed }) => [
                       styles.categoryOption,
-                      { opacity: pressed ? 0.6 : 1 },
+                      Shadows.hairline,
+                      {
+                        backgroundColor: selected ? (isDark ? colors.surfaceAubergine : `${item.color}15`) : colors.surface,
+                        borderColor: selected ? item.color : colors.border,
+                        opacity: pressed ? 0.65 : 1,
+                      },
                     ]}
                   >
-                    <View
-                      pointerEvents="none"
+                    <Icon size={18} color={selected ? item.color : colors.textSecondary} />
+                    <Text
                       style={[
-                        StyleSheet.absoluteFillObject,
-                        styles.optionSurface,
-                        Shadows.hard,
-                        { backgroundColor: selected ? `${item.color}18` : colors.surface, borderColor: selected ? item.color : colors.textPrimary },
+                        styles.categoryText,
+                        {
+                          color: selected ? colors.textPrimary : colors.textSecondary,
+                          fontFamily: selected ? FontFamily.bold : FontFamily.medium,
+                        },
                       ]}
-                    />
-                    <Icon size={19} color={selected ? item.color : colors.textSecondary} />
-                    <Text style={[styles.categoryText, { color: selected ? colors.textPrimary : colors.textSecondary }]} numberOfLines={1}>{item.label}</Text>
+                      numberOfLines={1}
+                    >
+                      {item.label}
+                    </Text>
                   </Pressable>
                 );
               })}
             </View>
 
             <FieldLabel label="Adresse ou position" />
-            <View style={[styles.addressField, Shadows.hard, { backgroundColor: colors.surface, borderColor: colors.textPrimary }]}>
-              <MapPin size={20} color={coordinates ? colors.accentGreen : colors.textMuted} />
+            <View style={[styles.addressField, Shadows.hairline, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <MapPin size={18} color={coordinates ? colors.success : colors.textMuted} />
               <TextInput
                 value={address}
                 onChangeText={(value) => { setAddress(value); setCoordinates(undefined); }}
@@ -252,14 +268,22 @@ export default function AddRestaurantScreen({ route, navigation }: Props) {
               />
             </View>
             <View style={styles.locationStatus}>
-              <Text style={[styles.helper, { color: coordinates ? colors.accentGreen : colors.textMuted }]}>{locationLabel}</Text>
+              <Text style={[styles.helper, { color: coordinates ? colors.success : colors.textMuted }]}>{locationLabel}</Text>
               <Pressable
                 onPress={useCurrentLocation}
                 disabled={locationLoading}
-                style={({ pressed }) => [styles.locationButton, { borderColor: colors.textPrimary, opacity: pressed ? 0.55 : 1 }]}
+                style={({ pressed }) => [
+                  styles.locationButton,
+                  Shadows.hairline,
+                  {
+                    backgroundColor: colors.surface,
+                    borderColor: colors.border,
+                    opacity: pressed ? 0.65 : 1,
+                  },
+                ]}
               >
-                {locationLoading ? <ActivityIndicator size="small" color={colors.accent} /> : <LocateFixed size={17} color={colors.accent} />}
-                <Text style={[styles.locationButtonText, { color: colors.textPrimary }]}>Ma position</Text>
+                {locationLoading ? <ActivityIndicator size="small" color={colors.primary} /> : <LocateFixed size={16} color={colors.primary} />}
+                <Text style={[styles.locationButtonText, { color: colors.primary }]}>Ma position</Text>
               </Pressable>
             </View>
           </>
@@ -275,18 +299,27 @@ export default function AddRestaurantScreen({ route, navigation }: Props) {
                   <Pressable
                     key={band.id}
                     onPress={() => setPriceBand(selected ? null : band.id)}
-                    style={({ pressed }) => [styles.priceOption, { opacity: pressed ? 0.6 : 1 }]}
+                    style={({ pressed }) => [
+                      styles.priceOption,
+                      Shadows.hairline,
+                      {
+                        backgroundColor: selected ? (isDark ? colors.surfaceAubergine : `${colors.primary}12`) : colors.surface,
+                        borderColor: selected ? colors.primary : colors.border,
+                        opacity: pressed ? 0.65 : 1,
+                      },
+                    ]}
                   >
-                    <View
-                      pointerEvents="none"
+                    <Text
                       style={[
-                        StyleSheet.absoluteFillObject,
-                        styles.optionSurface,
-                        Shadows.hard,
-                        { backgroundColor: selected ? `${colors.accent}18` : colors.surface, borderColor: selected ? colors.accent : colors.textPrimary },
+                        styles.priceText,
+                        {
+                          color: selected ? colors.primary : colors.textSecondary,
+                          fontFamily: selected ? FontFamily.bold : FontFamily.medium,
+                        },
                       ]}
-                    />
-                    <Text style={[styles.priceText, { color: selected ? colors.accent : colors.textSecondary }]}>{band.label}</Text>
+                    >
+                      {band.label}
+                    </Text>
                   </Pressable>
                 );
               })}
@@ -295,41 +328,108 @@ export default function AddRestaurantScreen({ route, navigation }: Props) {
             <FieldLabel label="Photos" />
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.photoRow}>
               {images.map((uri) => (
-                <View key={uri}>
+                <View key={uri} style={styles.photoWrap}>
                   <Image source={{ uri }} style={styles.photo} />
-                  <Pressable onPress={() => setImages((current) => current.filter((item) => item !== uri))} accessibilityLabel="Supprimer la photo" style={[styles.removePhoto, { backgroundColor: colors.surface }]}>
-                    <X size={16} color={colors.textPrimary} />
+                  <Pressable
+                    onPress={() => setImages((current) => current.filter((item) => item !== uri))}
+                    accessibilityLabel="Supprimer la photo"
+                    style={[styles.removePhoto, Shadows.card, { backgroundColor: colors.surface }]}
+                  >
+                    <X size={14} color={colors.textPrimary} />
                   </Pressable>
                 </View>
               ))}
               {images.length < 5 ? (
-                <Pressable onPress={addPhotos} style={({ pressed }) => [styles.addPhoto, { backgroundColor: colors.surface, borderColor: colors.textPrimary, opacity: pressed ? 0.6 : 1 }]}>
-                  <Camera size={23} color={colors.accent} />
-                  <Text style={[styles.addPhotoText, { color: colors.textSecondary }]}>Ajouter</Text>
+                <Pressable
+                  onPress={addPhotos}
+                  style={({ pressed }) => [
+                    styles.addPhoto,
+                    {
+                      backgroundColor: colors.surface,
+                      borderColor: colors.border,
+                      opacity: pressed ? 0.65 : 1,
+                    },
+                  ]}
+                >
+                  <Camera size={22} color={colors.primary} />
+                  <Text style={[styles.addPhotoText, { color: colors.primary }]}>Ajouter</Text>
                 </Pressable>
               ) : null}
             </ScrollView>
-            <Text style={[styles.helper, { color: colors.textMuted }]}>Sans photo, RestoHub crée une illustration avec le type et les initiales.</Text>
+            <Text style={[styles.helper, { color: colors.textMuted, marginTop: Spacing.xs }]}>Sans photo, RestoHub crée une illustration avec le type et les initiales.</Text>
+
+            <FieldLabel label="Plat à retenir" />
+            <TextInput
+              value={signatureDish}
+              onChangeText={setSignatureDish}
+              onSubmitEditing={Keyboard.dismiss}
+              returnKeyType="done"
+              blurOnSubmit
+              placeholder="Ex. Tiramisu maison, Gnocchis à la truffe…"
+              placeholderTextColor={colors.textMuted}
+              selectionColor={colors.accent}
+              style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.textPrimary }]}
+            />
+            <Text style={[styles.helper, { color: colors.textMuted, marginTop: 4 }]}>Le plat signature affiché en priorité sur la fiche.</Text>
 
             <FieldLabel label="Description" />
-            <TextInput value={description} onChangeText={setDescription} onSubmitEditing={Keyboard.dismiss} blurOnSubmit placeholder="Ambiance, service, ce qui vaut le détour…" placeholderTextColor={colors.textMuted} selectionColor={colors.accent} multiline style={[styles.input, styles.multiline, { backgroundColor: colors.surface, borderColor: colors.textPrimary, color: colors.textPrimary }]} />
+            <TextInput
+              value={description}
+              onChangeText={setDescription}
+              onSubmitEditing={Keyboard.dismiss}
+              blurOnSubmit
+              placeholder="Ambiance, service, ce qui vaut le détour…"
+              placeholderTextColor={colors.textMuted}
+              selectionColor={colors.accent}
+              multiline
+              style={[styles.input, styles.multiline, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.textPrimary }]}
+            />
 
             <FieldLabel label="Tags" />
-            <TextInput value={tagsText} onChangeText={setTagsText} onSubmitEditing={Keyboard.dismiss} returnKeyType="done" blurOnSubmit placeholder="terrasse, date, veggie" placeholderTextColor={colors.textMuted} selectionColor={colors.accent} autoCapitalize="none" style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.textPrimary, color: colors.textPrimary }]} />
-            <Text style={[styles.helper, { color: colors.textMuted }]}>Séparez les tags par une virgule.</Text>
+            <TextInput
+              value={tagsText}
+              onChangeText={setTagsText}
+              onSubmitEditing={Keyboard.dismiss}
+              returnKeyType="done"
+              blurOnSubmit
+              placeholder="terrasse, date, veggie"
+              placeholderTextColor={colors.textMuted}
+              selectionColor={colors.accent}
+              autoCapitalize="none"
+              style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.textPrimary }]}
+            />
+            <Text style={[styles.helper, { color: colors.textMuted, marginTop: 4 }]}>Séparez les tags par une virgule.</Text>
           </>
         )}
-        <View style={[styles.bottomBar, { backgroundColor: colors.surface, borderColor: colors.textPrimary }]}>
+
+        <View style={styles.bottomBar}>
           <Pressable
             onPress={step === 1 ? continueToDetails : submit}
             disabled={(step === 1 && !name.trim()) || saving || locationLoading}
             style={({ pressed }) => [
               styles.primaryButton,
-              { backgroundColor: colors.accent, opacity: (step === 1 && !name.trim()) || saving || locationLoading ? 0.42 : pressed ? 0.72 : 1 },
+              Shadows.card,
+              {
+                backgroundColor: colors.primary,
+                opacity: (step === 1 && !name.trim()) || saving || locationLoading ? 0.42 : pressed ? 0.78 : 1,
+              },
             ]}
           >
-            {saving || locationLoading ? <ActivityIndicator size="small" color={colors.textOnAccent} /> : step === 1 ? <ArrowRight size={19} color={colors.textOnAccent} /> : <Check size={19} color={colors.textOnAccent} />}
-            <Text style={[styles.primaryButtonText, { color: colors.textOnAccent }]}>{step === 1 ? 'Continuer' : editing ? 'Enregistrer' : 'Ajouter le resto'}</Text>
+            {saving || locationLoading ? (
+              <ActivityIndicator size="small" color={colors.textOnPrimary} />
+            ) : step === 1 ? (
+              <>
+                <Text style={[styles.primaryButtonText, { color: colors.textOnPrimary }]}>Continuer</Text>
+                <ArrowRight size={18} color={colors.textOnPrimary} />
+              </>
+            ) : (
+              <>
+                <Check size={18} color={colors.textOnPrimary} strokeWidth={2.5} />
+                <Text style={[styles.primaryButtonText, { color: colors.textOnPrimary }]}>
+                  {editing ? 'Enregistrer' : 'Ajouter le resto'}
+                </Text>
+              </>
+            )}
           </Pressable>
         </View>
       </ScrollView>
@@ -339,7 +439,7 @@ export default function AddRestaurantScreen({ route, navigation }: Props) {
   function FieldLabel({ label, required = false }: { label: string; required?: boolean }) {
     return (
       <Text style={[styles.label, { color: colors.textPrimary }]}>
-        {label}{required ? <Text style={{ color: colors.accent }}> *</Text> : null}
+        {label}{required ? <Text style={{ color: colors.danger }}> *</Text> : null}
       </Text>
     );
   }
@@ -347,38 +447,47 @@ export default function AddRestaurantScreen({ route, navigation }: Props) {
 
 const styles = StyleSheet.create({
   screen: { flex: 1 },
-  topBar: { minHeight: 54, paddingHorizontal: Spacing.sm, paddingBottom: 6, flexDirection: 'row', alignItems: 'flex-end' },
+  topBar: { minHeight: 50, paddingHorizontal: Spacing.sm, flexDirection: 'row', alignItems: 'center' },
   topAction: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-  topCopy: { flex: 1, alignItems: 'center', paddingBottom: 7 },
-  topTitle: { fontFamily: FontFamily.semiBold, fontSize: FontSize.md },
-  stepText: { marginTop: 2, fontFamily: FontFamily.medium, fontSize: FontSize.xs },
+  topCopy: { flex: 1, alignItems: 'center' },
+  topTitle: { fontFamily: FontFamily.bold, fontSize: FontSize.md, letterSpacing: -0.2 },
+  stepText: { marginTop: 1, fontFamily: FontFamily.medium, fontSize: FontSize.xs },
   progressTrack: { height: 3 },
   progressValue: { height: 3 },
-  content: { paddingHorizontal: Spacing.lg, paddingTop: Spacing.xxl },
-  heading: { marginBottom: Spacing.lg, fontFamily: FontFamily.semiBold, fontSize: FontSize.xl, lineHeight: 29, letterSpacing: -0.4 },
-  label: { marginTop: Spacing.xl, marginBottom: Spacing.sm, fontFamily: FontFamily.medium, fontSize: FontSize.sm },
-  input: { minHeight: 50, paddingHorizontal: Spacing.md, borderWidth: 1.5, borderRadius: 8, fontFamily: FontFamily.regular, fontSize: FontSize.md },
-  multiline: { minHeight: 112, paddingTop: Spacing.md, textAlignVertical: 'top' },
-  error: { marginTop: 6, fontFamily: FontFamily.medium, fontSize: FontSize.xs },
+  content: { paddingHorizontal: Spacing.lg, paddingTop: Spacing.lg },
+  heading: { marginBottom: Spacing.md, fontFamily: FontFamily.bold, fontSize: FontSize.xl, lineHeight: 28, letterSpacing: -0.4 },
+  label: { marginTop: Spacing.lg, marginBottom: Spacing.xs, fontFamily: FontFamily.semiBold, fontSize: FontSize.sm },
+  input: { minHeight: 48, paddingHorizontal: Spacing.md, borderWidth: 1, borderRadius: BorderRadius.md, fontFamily: FontFamily.regular, fontSize: FontSize.md },
+  multiline: { minHeight: 100, paddingTop: Spacing.md, textAlignVertical: 'top' },
+  error: { marginTop: 4, fontFamily: FontFamily.medium, fontSize: FontSize.xs },
   helper: { fontFamily: FontFamily.regular, fontSize: FontSize.xs, lineHeight: 18 },
   categoryGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
-  categoryOption: { position: 'relative', width: '31%', minHeight: 64, padding: Spacing.sm, alignItems: 'center', justifyContent: 'center', gap: 6 },
-  optionSurface: { borderWidth: 1.5, borderRadius: 8 },
-  categoryText: { maxWidth: '100%', fontFamily: FontFamily.medium, fontSize: 11 },
-  addressField: { minHeight: 50, paddingHorizontal: Spacing.md, flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, borderWidth: 1.5, borderRadius: 8 },
-  addressInput: { flex: 1, minHeight: 48, fontFamily: FontFamily.regular, fontSize: FontSize.md },
-  locationStatus: { minHeight: 48, marginTop: Spacing.sm, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: Spacing.sm },
-  locationButton: { minHeight: 44, paddingHorizontal: Spacing.md, flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1.5, borderRadius: 8 },
+  categoryOption: {
+    width: '31%',
+    minHeight: 60,
+    padding: Spacing.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    borderWidth: 1,
+    borderRadius: BorderRadius.md,
+  },
+  categoryText: { maxWidth: '100%', fontSize: 11 },
+  addressField: { minHeight: 48, paddingHorizontal: Spacing.md, flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, borderWidth: 1, borderRadius: BorderRadius.md },
+  addressInput: { flex: 1, minHeight: 44, fontFamily: FontFamily.regular, fontSize: FontSize.md },
+  locationStatus: { minHeight: 44, marginTop: Spacing.xs, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: Spacing.sm },
+  locationButton: { minHeight: 38, paddingHorizontal: Spacing.md, flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, borderRadius: BorderRadius.md },
   locationButtonText: { fontFamily: FontFamily.semiBold, fontSize: FontSize.xs },
   priceRow: { flexDirection: 'row', gap: Spacing.sm },
-  priceOption: { position: 'relative', flex: 1, minHeight: 46, alignItems: 'center', justifyContent: 'center' },
-  priceText: { fontFamily: FontFamily.semiBold, fontSize: FontSize.sm },
+  priceOption: { flex: 1, minHeight: 44, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderRadius: BorderRadius.md },
+  priceText: { fontSize: FontSize.sm },
   photoRow: { gap: Spacing.sm, paddingRight: Spacing.lg },
-  photo: { width: 88, height: 88, borderRadius: BorderRadius.md },
-  removePhoto: { position: 'absolute', top: 4, right: 4, width: 30, height: 30, alignItems: 'center', justifyContent: 'center', borderRadius: 15 },
-  addPhoto: { width: 88, height: 88, alignItems: 'center', justifyContent: 'center', gap: 6, borderWidth: 1, borderStyle: 'dashed', borderRadius: BorderRadius.md },
-  addPhotoText: { fontFamily: FontFamily.medium, fontSize: FontSize.xs },
-  bottomBar: { marginTop: Spacing.xxl, marginBottom: Spacing.lg, padding: Spacing.sm, borderWidth: 1.5, borderRadius: 12 },
-  primaryButton: { minHeight: 52, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Spacing.sm, borderRadius: BorderRadius.md },
-  primaryButtonText: { fontFamily: FontFamily.semiBold, fontSize: FontSize.md },
+  photoWrap: { width: 80, height: 80 },
+  photo: { width: 80, height: 80, borderRadius: BorderRadius.md },
+  removePhoto: { position: 'absolute', top: -5, right: -5, width: 24, height: 24, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  addPhoto: { width: 80, height: 80, alignItems: 'center', justifyContent: 'center', gap: 4, borderWidth: 1, borderStyle: 'dashed', borderRadius: BorderRadius.md },
+  addPhotoText: { fontFamily: FontFamily.semiBold, fontSize: FontSize.xs },
+  bottomBar: { marginTop: Spacing.xxl, marginBottom: Spacing.lg },
+  primaryButton: { minHeight: 50, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Spacing.sm, borderRadius: BorderRadius.button },
+  primaryButtonText: { fontFamily: FontFamily.bold, fontSize: FontSize.md, letterSpacing: 0.1 },
 });

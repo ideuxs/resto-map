@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import { Plus } from './FlaticonIcon';
 
-import { FontFamily, FontSize, Shadows, Spacing } from '../constants/theme';
+import { BorderRadius, FontFamily, FontSize, Shadows, Spacing } from '../constants/theme';
 import { useTheme } from '../theme/ThemeProvider';
 
 type Props = {
@@ -29,7 +29,7 @@ export default function ScreenHeader({
   showAdd = true,
   style,
 }: Props) {
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const displaysAdd = Boolean(onAdd && showAdd);
 
   return (
@@ -49,15 +49,20 @@ export default function ScreenHeader({
             hitSlop={4}
             style={({ pressed }) => [
               styles.addButton,
-              Shadows.hard,
-              { backgroundColor: colors.accentPink, borderColor: colors.textPrimary, opacity: pressed ? 0.7 : 1 },
+              Shadows.card,
+              {
+                backgroundColor: isDark ? '#4A154B' : colors.primary,
+                borderColor: isDark ? '#6B2370' : 'transparent',
+                borderWidth: isDark ? 1 : 0,
+                opacity: pressed ? 0.8 : 1,
+              },
             ]}
           >
-            <Plus size={23} color={colors.textOnAccent} strokeWidth={2.2} />
+            <Plus size={20} color={colors.textOnPrimary} strokeWidth={2.4} />
           </Pressable>
         ) : null}
       </View>
-      <Text numberOfLines={1} ellipsizeMode="tail" style={[styles.subtitle, { color: colors.textSecondary }]}>
+      <Text numberOfLines={1} ellipsizeMode="tail" style={[styles.subtitle, { color: colors.textMuted }]}>
         {subtitle}
       </Text>
     </View>
@@ -69,14 +74,15 @@ const styles = StyleSheet.create({
     minHeight: 44,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     gap: Spacing.md,
   },
   title: {
     flex: 1,
     minWidth: 0,
     fontFamily: FontFamily.bold,
-    fontSize: FontSize.xxl,
-    letterSpacing: -0.8,
+    fontSize: FontSize.title,
+    letterSpacing: -0.768,
   },
   subtitle: {
     marginTop: Spacing.xs,
@@ -86,12 +92,11 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   addButton: {
-    width: 44,
-    height: 44,
+    width: 40,
+    height: 40,
     flexShrink: 0,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 8,
-    borderWidth: 1.5,
+    borderRadius: BorderRadius.md,
   },
 });

@@ -264,7 +264,7 @@ async function readCatalog(): Promise<CatalogSnapshot> {
         ...reference,
         rating: reference.origin.kind === 'personal' ? undefined : reference.rating,
         wouldReturn: reference.origin.kind === 'personal' ? undefined : reference.wouldReturn,
-        signatureDish: reference.origin.kind === 'personal' ? undefined : reference.signatureDish,
+        signatureDish: reference.signatureDish,
         origin: reference.origin.kind === 'imported'
           ? {
               ...reference.origin,
@@ -355,7 +355,7 @@ function projectSummaries(catalog: CatalogSnapshot, visibleOnly: boolean): Place
       visitedAt: lastVisit?.visitedAt,
       rating: personalAverage ?? primary.rating,
       wouldReturn: lastVisit?.wouldReturn ?? primary.wouldReturn,
-      signatureDish: lastVisit?.dishes[0] ?? primary.signatureDish,
+      signatureDish: primary.signatureDish || lastVisit?.dishes[0],
       tags: primary.tags || [],
       priceMin: primary.priceMin,
       priceMax: primary.priceMax,

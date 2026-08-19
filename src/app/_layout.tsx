@@ -109,7 +109,7 @@ export default function RootLayout() {
   if (!fontsLoaded) {
     return (
       <View style={styles.loading}>
-        <ActivityIndicator color="#292C90" />
+        <ActivityIndicator color="#4A154B" />
       </View>
     );
   }
@@ -128,6 +128,6 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#F5EFF7',
+    backgroundColor: '#F4EDE4',
   },
 });

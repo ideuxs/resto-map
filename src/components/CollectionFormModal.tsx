@@ -30,7 +30,7 @@ type Props = {
 };
 
 export default function CollectionFormModal({ visible, collection, onClose, onSave }: Props) {
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const [name, setName] = useState('');
   const [iconName, setIconName] = useState('Bookmark');
@@ -129,7 +129,7 @@ export default function CollectionFormModal({ visible, collection, onClose, onSa
       >
         <Pressable style={StyleSheet.absoluteFillObject} onPress={onClose} />
         <View style={[styles.sheet, { backgroundColor: colors.surface }]}>
-          <View style={[styles.header, { paddingTop: insets.top + Spacing.lg }]}>
+          <View style={[styles.header, { paddingTop: insets.top + Spacing.md }]}>
             <Text style={[styles.title, { color: colors.textPrimary }]}>
               {collection ? 'Modifier la liste' : 'Nouvelle liste'}
             </Text>
@@ -140,7 +140,7 @@ export default function CollectionFormModal({ visible, collection, onClose, onSa
               hitSlop={8}
               style={({ pressed }) => [styles.close, { opacity: pressed ? 0.55 : 1 }]}
             >
-              <X size={22} color={colors.textPrimary} />
+              <X size={20} color={colors.textPrimary} />
             </Pressable>
           </View>
 
@@ -155,21 +155,40 @@ export default function CollectionFormModal({ visible, collection, onClose, onSa
             keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
             showsVerticalScrollIndicator={false}
           >
-            <Text style={[styles.label, { color: colors.textPrimary }]}>Image de couverture <Text style={{ color: colors.textMuted }}>(facultatif)</Text></Text>
+            <Text style={[styles.label, { color: colors.textPrimary }]}>
+              Image de couverture <Text style={{ color: colors.textMuted }}>(facultatif)</Text>
+            </Text>
             <Pressable
               onPress={chooseCover}
               accessibilityRole="button"
               accessibilityLabel={imageUri ? 'Modifier l’image de couverture' : 'Ajouter une image de couverture'}
-              style={({ pressed }) => [styles.coverPicker, Shadows.hard, { backgroundColor: colors.surfaceLight, borderColor: colors.textPrimary, opacity: pressed ? 0.72 : 1 }]}
+              style={({ pressed }) => [
+                styles.coverPicker,
+                Shadows.hairline,
+                {
+                  backgroundColor: colors.surfaceLight,
+                  borderColor: colors.border,
+                  opacity: pressed ? 0.72 : 1,
+                },
+              ]}
             >
               {imageUri ? <Image source={{ uri: imageUri }} style={styles.coverPreview} contentFit="cover" /> : null}
               <View style={styles.coverCopy}>
-                <Text style={[styles.coverTitle, { color: colors.textPrimary }]}>{imageUri ? 'Modifier la couverture' : 'Ajouter une couverture'}</Text>
-                <Text style={[styles.coverDetail, { color: colors.textMuted }]}>Une image pour reconnaître la liste en un coup d’œil.</Text>
+                <Text style={[styles.coverTitle, { color: colors.textPrimary }]}>
+                  {imageUri ? 'Modifier la couverture' : 'Ajouter une couverture'}
+                </Text>
+                <Text style={[styles.coverDetail, { color: colors.textMuted }]}>
+                  Une image pour reconnaître la liste en un coup d’œil.
+                </Text>
               </View>
             </Pressable>
             {imageUri ? (
-              <Pressable onPress={() => setImageUri(undefined)} accessibilityRole="button" accessibilityLabel="Retirer l’image de couverture" style={styles.removeCover}>
+              <Pressable
+                onPress={() => setImageUri(undefined)}
+                accessibilityRole="button"
+                accessibilityLabel="Retirer l’image de couverture"
+                style={styles.removeCover}
+              >
                 <Text style={[styles.removeCoverText, { color: colors.danger }]}>Retirer l’image</Text>
               </Pressable>
             ) : null}
@@ -188,8 +207,11 @@ export default function CollectionFormModal({ visible, collection, onClose, onSa
               accessibilityLabel="Nom de la liste"
               style={[
                 styles.input,
-                Shadows.hard,
-                { color: colors.textPrimary, backgroundColor: colors.background, borderColor: nameTouched && !name.trim() ? colors.danger : colors.textPrimary },
+                {
+                  color: colors.textPrimary,
+                  backgroundColor: isDark ? colors.surfaceLight : colors.background,
+                  borderColor: nameTouched && !name.trim() ? colors.danger : colors.border,
+                },
               ]}
             />
             {nameTouched && !name.trim() ? (
@@ -210,27 +232,29 @@ export default function CollectionFormModal({ visible, collection, onClose, onSa
                     style={({ pressed }) => [
                       styles.iconButton,
                       {
-                        backgroundColor: selected ? `${colors.accent}18` : colors.background,
-                        borderColor: selected ? colors.accent : colors.textPrimary,
+                        backgroundColor: selected ? (isDark ? colors.surfaceAubergine : `${colors.primary}18`) : (isDark ? colors.surfaceLight : colors.background),
+                        borderColor: selected ? colors.primary : colors.border,
                         opacity: pressed ? 0.6 : 1,
                       },
                     ]}
                   >
-                    <Icon size={23} color={selected ? colors.accent : colors.textSecondary} strokeWidth={2} />
+                    <Icon size={22} color={selected ? colors.primary : colors.textSecondary} strokeWidth={selected ? 2.2 : 1.8} />
                   </Pressable>
                 );
               })}
             </ScrollView>
 
             <View style={styles.descriptionLabelRow}>
-              <Text style={[styles.label, styles.descriptionLabel, { color: colors.textPrimary }]}>Description <Text style={{ color: colors.textMuted }}>(facultatif)</Text></Text>
+              <Text style={[styles.label, styles.descriptionLabel, { color: colors.textPrimary }]}>
+                Description <Text style={{ color: colors.textMuted }}>(facultatif)</Text>
+              </Text>
               <Pressable
                 onPress={Keyboard.dismiss}
                 accessibilityRole="button"
                 accessibilityLabel="Fermer le clavier de la description"
                 style={({ pressed }) => [styles.descriptionDone, { opacity: pressed ? 0.55 : 1 }]}
               >
-                <Text style={[styles.descriptionDoneText, { color: colors.accent }]}>Terminé</Text>
+                <Text style={[styles.descriptionDoneText, { color: colors.link }]}>Terminé</Text>
               </Pressable>
             </View>
             <TextInput
@@ -247,7 +271,15 @@ export default function CollectionFormModal({ visible, collection, onClose, onSa
               multiline
               numberOfLines={3}
               accessibilityLabel="Description de la liste"
-              style={[styles.input, styles.multiline, Shadows.hard, { color: colors.textPrimary, backgroundColor: colors.background, borderColor: colors.textPrimary }]}
+              style={[
+                styles.input,
+                styles.multiline,
+                {
+                  color: colors.textPrimary,
+                  backgroundColor: isDark ? colors.surfaceLight : colors.background,
+                  borderColor: colors.border,
+                },
+              ]}
             />
           </ScrollView>
 
@@ -259,11 +291,14 @@ export default function CollectionFormModal({ visible, collection, onClose, onSa
                 accessibilityRole="button"
                 style={({ pressed }) => [
                   styles.save,
-                  Shadows.hard,
-                  { backgroundColor: colors.accentPink, borderColor: colors.textPrimary, opacity: !name.trim() || saving ? 0.42 : pressed ? 0.72 : 1 },
+                  Shadows.card,
+                  {
+                    backgroundColor: colors.primary,
+                    opacity: !name.trim() || saving ? 0.42 : pressed ? 0.78 : 1,
+                  },
                 ]}
               >
-                <Text style={[styles.saveText, { color: colors.textOnAccent }]}>
+                <Text style={[styles.saveText, { color: colors.textOnPrimary }]}>
                   {saving ? 'Enregistrement…' : collection ? 'Enregistrer' : 'Créer la liste'}
                 </Text>
               </Pressable>
@@ -293,36 +328,55 @@ const styles = StyleSheet.create({
   },
   header: {
     minHeight: 44,
-    marginBottom: Spacing.md,
+    marginBottom: Spacing.sm,
     paddingHorizontal: Spacing.xl,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  title: { fontFamily: FontFamily.semiBold, fontSize: FontSize.xl },
+  title: {
+    fontFamily: FontFamily.bold,
+    fontSize: FontSize.xl,
+    letterSpacing: -0.3,
+  },
   close: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   formScroll: { flex: 1 },
   formContent: { paddingHorizontal: Spacing.xl, paddingBottom: Spacing.xxl },
   label: {
     marginTop: Spacing.lg,
     marginBottom: Spacing.sm,
-    fontFamily: FontFamily.medium,
+    fontFamily: FontFamily.semiBold,
     fontSize: FontSize.sm,
   },
-  descriptionLabelRow: { marginTop: Spacing.lg, marginBottom: Spacing.sm, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: Spacing.md },
+  descriptionLabelRow: {
+    marginTop: Spacing.lg,
+    marginBottom: Spacing.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Spacing.md,
+  },
   descriptionLabel: { flex: 1, marginTop: 0, marginBottom: 0 },
-  descriptionDone: { minWidth: 76, minHeight: 44, alignItems: 'flex-end', justifyContent: 'center' },
+  descriptionDone: { minWidth: 76, minHeight: 36, alignItems: 'flex-end', justifyContent: 'center' },
   descriptionDoneText: { fontFamily: FontFamily.semiBold, fontSize: FontSize.sm },
   input: {
     minHeight: 48,
     paddingHorizontal: Spacing.md,
-    borderWidth: 1.5,
-    borderRadius: 8,
+    borderWidth: 1,
+    borderRadius: BorderRadius.md,
     fontFamily: FontFamily.regular,
     fontSize: FontSize.md,
   },
-  coverPicker: { minHeight: 76, padding: Spacing.sm, flexDirection: 'row', alignItems: 'center', gap: Spacing.md, borderWidth: 1.5, borderRadius: 10 },
-  coverPreview: { width: 62, height: 62, borderRadius: BorderRadius.md },
+  coverPicker: {
+    minHeight: 76,
+    padding: Spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.md,
+    borderWidth: 1,
+    borderRadius: BorderRadius.lg,
+  },
+  coverPreview: { width: 56, height: 56, borderRadius: BorderRadius.md },
   coverCopy: { flex: 1 },
   coverTitle: { fontFamily: FontFamily.semiBold, fontSize: FontSize.sm },
   coverDetail: { marginTop: 3, fontFamily: FontFamily.regular, fontSize: FontSize.xs, lineHeight: 17 },
@@ -332,14 +386,14 @@ const styles = StyleSheet.create({
   error: { marginTop: 6, fontFamily: FontFamily.medium, fontSize: FontSize.xs },
   iconList: { gap: Spacing.sm, paddingVertical: 2, paddingRight: Spacing.xl },
   iconButton: {
-    width: 48,
-    height: 48,
-    borderRadius: 8,
-    borderWidth: 1.5,
+    width: 46,
+    height: 46,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
   footer: { paddingTop: Spacing.md, paddingHorizontal: Spacing.xl },
-  save: { minHeight: 52, borderRadius: 8, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
-  saveText: { fontFamily: FontFamily.semiBold, fontSize: FontSize.md },
+  save: { minHeight: 50, borderRadius: BorderRadius.button, alignItems: 'center', justifyContent: 'center' },
+  saveText: { fontFamily: FontFamily.bold, fontSize: FontSize.md, letterSpacing: 0.1 },
 });

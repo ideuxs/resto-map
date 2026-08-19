@@ -1,60 +1,75 @@
 import { Platform, StyleSheet } from 'react-native';
 
 export const lightColors = {
-  // The logo is the source of truth: acid pink, ink navy and paper lavender.
-  background: '#F5EFF7',
-  surface: '#FFFFFF',
-  surfaceLight: '#E9DDF0',
-  surfaceMuted: '#E9DDF0',
-  overlay: 'rgba(16, 13, 24, 0.56)',
-  glass: 'rgba(250, 248, 251, 0.84)',
-  primary: '#292C90',
-  primaryLight: '#7C4C9B',
-  accent: '#292C90',
-  accentPink: '#FF007F',
-  friendText: '#A60062',
+  background: '#F4EDE4', // Canvas Cream
+  surface: '#FFFFFF', // Canvas White
+  surfaceLight: '#F9F0FF', // Canvas Lavender
+  surfaceMuted: '#EFE6E0', // Muted cream tone
+  surfaceAubergine: '#4A154B', // Signature Aubergine surface
+  canvasCream: '#F4EDE4',
+  canvasLavender: '#F9F0FF',
+  overlay: 'rgba(21, 13, 24, 0.48)',
+  glass: 'rgba(255, 255, 255, 0.88)',
+  primary: '#4A154B', // Aubergine primary
+  primaryDeep: '#481A54',
+  primaryPress: '#611F69',
+  primaryTint: '#592466',
+  accent: '#4A154B',
+  accentPink: '#4A154B',
+  friendText: '#1264A3',
   lavender: '#7C4C9B',
-  accentYellow: '#765500',
-  accentGreen: '#087A54',
-  textOnPrimary: '#FAF8FB',
-  textOnAccent: '#FAF8FB',
-  textPrimary: '#17121E',
-  textSecondary: '#51485A',
-  textMuted: '#6E6575',
-  border: '#17121E',
-  borderLight: '#D9CEE1',
-  borderGlass: 'rgba(41, 44, 144, 0.16)',
-  danger: '#B42318',
-  success: '#087A54',
-  warning: '#936300',
+  link: '#1264A3', // Link Blue
+  linkHover: '#3860BE',
+  accentYellow: '#D97706',
+  accentGreen: '#007A5A',
+  textOnPrimary: '#FFFFFF',
+  textOnAccent: '#FFFFFF',
+  textOnAubergineMute: '#D9BDDE',
+  textPrimary: '#1D1D1D', // Ink
+  textSecondary: '#4A4A4A',
+  textMuted: '#696969', // Ink Mute
+  border: '#E6E6E6', // Hairline border
+  borderLight: '#F0F0F0',
+  borderGlass: 'rgba(74, 21, 75, 0.08)',
+  danger: '#CC4117', // Semantic error
+  success: '#007A5A', // Semantic success
+  warning: '#D97706',
 };
 
 export const darkColors: typeof lightColors = {
-  background: '#100D18',
-  surface: '#1B1426',
-  surfaceLight: '#2B2140',
-  surfaceMuted: '#2B2140',
-  overlay: 'rgba(5, 4, 9, 0.72)',
-  glass: 'rgba(26, 21, 35, 0.86)',
-  primary: '#9A9FF4',
-  primaryLight: '#C9A5DF',
-  accent: '#9A9FF4',
-  accentPink: '#FF3BA4',
-  friendText: '#FF8BCB',
-  lavender: '#C9A5DF',
-  accentYellow: '#E8BA62',
-  accentGreen: '#5AD3A2',
-  textOnPrimary: '#100D18',
-  textOnAccent: '#100D18',
-  textPrimary: '#FAF8FB',
-  textSecondary: '#D4C9DC',
-  textMuted: '#A99DB2',
-  border: '#F8F3FF',
-  borderLight: '#403252',
-  borderGlass: 'rgba(201, 165, 223, 0.18)',
-  danger: '#FF9187',
-  success: '#5AD3A2',
-  warning: '#E8BA62',
+  background: '#110D14', // Deep Charcoal with subtle warm plum undertone
+  surface: '#1C1622', // Clean dark elevated card surface
+  surfaceLight: '#282030', // Secondary dark surface for nested elements
+  surfaceMuted: '#221B29',
+  surfaceAubergine: '#4A154B', // Signature Slacc Aubergine
+  canvasCream: '#110D14',
+  canvasLavender: '#282030',
+  overlay: 'rgba(8, 4, 10, 0.78)',
+  glass: 'rgba(28, 22, 34, 0.88)',
+  primary: '#A84BAE', // Refined vibrant aubergine in dark mode
+  primaryDeep: '#8E3694',
+  primaryPress: '#BD62C3',
+  primaryTint: '#4A154B',
+  accent: '#A84BAE',
+  accentPink: '#A84BAE',
+  friendText: '#70B6FF',
+  lavender: '#E7D0EB', // Soft luminous lavender
+  link: '#70B6FF',
+  linkHover: '#96CAFF',
+  accentYellow: '#FBBF24',
+  accentGreen: '#3DD69B',
+  textOnPrimary: '#FFFFFF', // Crisp pure white
+  textOnAccent: '#FFFFFF',
+  textOnAubergineMute: '#E7D0EB',
+  textPrimary: '#FAF8FC', // Crisp clear off-white
+  textSecondary: '#D8CEE0', // Clean readable secondary text
+  textMuted: '#9B8C9F', // Soft readable muted text
+  border: '#2E2336', // Clean hairline border
+  borderLight: '#251C2C',
+  borderGlass: 'rgba(231, 208, 235, 0.12)',
+  danger: '#FF8566',
+  success: '#3DD69B',
+  warning: '#FBBF24',
 };
 
 export type ThemeColors = typeof lightColors;
@@ -78,24 +93,24 @@ export function isSourceColorKey(value: string | undefined): value is SourceColo
 
 export const sourceColors: Record<'light' | 'dark', Record<SourceColorKey, string>> = {
   light: {
-    rose: '#A91963',
-    magenta: '#D10B78',
-    plum: '#7C3F73',
-    violet: '#6D3CF5',
-    grape: '#553B88',
-    indigo: '#292C90',
-    iris: '#4145A0',
-    orchid: '#8F3F8D',
+    rose: '#8E1854',
+    magenta: '#A8136A',
+    plum: '#6E2D64',
+    violet: '#582CA8',
+    grape: '#4A154B',
+    indigo: '#1264A3',
+    iris: '#3848A2',
+    orchid: '#7E3685',
   },
   dark: {
-    rose: '#FF77C5',
-    magenta: '#FF3BA4',
-    plum: '#D49AD0',
-    violet: '#B58CFF',
-    grape: '#B69CE5',
-    indigo: '#9A9FF4',
-    iris: '#AEB2FF',
-    orchid: '#E39CDE',
+    rose: '#FF80B5',
+    magenta: '#FF6BB8',
+    plum: '#D9A1D3',
+    violet: '#C29EFF',
+    grape: '#D9BDDE',
+    indigo: '#70B6FF',
+    iris: '#A1B1FF',
+    orchid: '#E5A5E0',
   },
 };
 
@@ -123,11 +138,15 @@ export const Spacing = {
 };
 
 export const BorderRadius = {
-  sm: 6,
-  md: 10,
-  lg: 14,
-  xl: 16,
-  full: 999,
+  xs: 3,
+  sm: 6, // Form inputs, compact tags
+  md: 10, // Standard buttons, compact cards
+  lg: 14, // Main action buttons, medium cards
+  xl: 16, // Feature cards, restaurant cards, container sheets
+  xxl: 24, // Large containers
+  button: 12, // Standard iOS-inspired button radius
+  badge: 6, // Square-rounded badge
+  full: 999, // Reserved strictly for avatars/circular icons if needed
 };
 
 export const FontSize = {
@@ -138,6 +157,8 @@ export const FontSize = {
   xl: 23,
   xxl: 28,
   title: 32,
+  display: 40,
+  stat: 48,
 };
 
 export const FontFamily = {
@@ -151,49 +172,72 @@ export const Shadows = {
   hairline: {
     ...Platform.select({
       ios: {
-        shadowColor: '#100D18',
+        shadowColor: '#000000',
         shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.05,
-        shadowRadius: 4,
+        shadowOpacity: 0.04,
+        shadowRadius: 3,
       },
       android: { elevation: 1 },
       default: {},
     }),
   },
-  sheet: {
+  card: {
     ...Platform.select({
       ios: {
-        shadowColor: '#07050B',
-        shadowOffset: { width: 0, height: -2 },
-        shadowOpacity: 0.14,
-        shadowRadius: 8,
-      },
-      android: { elevation: 6 },
-      default: {},
-    }),
-  },
-  surface: {
-    ...Platform.select({
-      ios: {
-        shadowColor: '#100D18',
+        shadowColor: '#1D1D1D',
         shadowOffset: { width: 0, height: 3 },
-        shadowOpacity: 0.1,
+        shadowOpacity: 0.06,
         shadowRadius: 10,
       },
       android: { elevation: 2 },
       default: {},
     }),
   },
-  /** A deliberately unblurred zine shadow. Use on one signature surface per screen. */
+  sheet: {
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000000',
+        shadowOffset: { width: 0, height: -3 },
+        shadowOpacity: 0.12,
+        shadowRadius: 12,
+      },
+      android: { elevation: 6 },
+      default: {},
+    }),
+  },
+  floating: {
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000000',
+        shadowOffset: { width: 0, height: 5 },
+        shadowOpacity: 0.1,
+        shadowRadius: 20,
+      },
+      android: { elevation: 4 },
+      default: {},
+    }),
+  },
+  surface: {
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 8,
+      },
+      android: { elevation: 2 },
+      default: {},
+    }),
+  },
   hard: {
     ...Platform.select({
       ios: {
-        shadowColor: '#17121E',
-        shadowOffset: { width: 4, height: 4 },
-        shadowOpacity: 1,
-        shadowRadius: 0,
+        shadowColor: '#000000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 6,
       },
-      android: { elevation: 4 },
+      android: { elevation: 1 },
       default: {},
     }),
   },

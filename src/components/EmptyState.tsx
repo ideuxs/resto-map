@@ -13,23 +13,28 @@ type Props = {
 };
 
 export default function EmptyState({ icon: Icon, title, subtitle, actionLabel, onAction }: Props) {
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   return (
     <View style={styles.container}>
-      <Icon size={34} color={colors.accent} strokeWidth={1.7} />
+      <View style={[styles.iconWrapper, { backgroundColor: isDark ? colors.surfaceLight : colors.surfaceLight }]}>
+        <Icon size={32} color={colors.primary} strokeWidth={1.8} />
+      </View>
       <Text style={[styles.title, { color: colors.textPrimary }]}>{title}</Text>
-      {subtitle ? <Text style={[styles.subtitle, { color: colors.textSecondary }]}>{subtitle}</Text> : null}
+      {subtitle ? <Text style={[styles.subtitle, { color: colors.textMuted }]}>{subtitle}</Text> : null}
       {actionLabel && onAction ? (
         <Pressable
           accessibilityRole="button"
           onPress={onAction}
           style={({ pressed }) => [
             styles.action,
-            Shadows.hard,
-            { backgroundColor: colors.accentPink, borderColor: colors.textPrimary, borderWidth: 1.5, opacity: pressed ? 0.72 : 1 },
+            Shadows.card,
+            {
+              backgroundColor: colors.primary,
+              opacity: pressed ? 0.78 : 1,
+            },
           ]}
         >
-          <Text style={[styles.actionText, { color: colors.textOnAccent }]}>{actionLabel}</Text>
+          <Text style={[styles.actionText, { color: colors.textOnPrimary }]}>{actionLabel}</Text>
         </Pressable>
       ) : null}
     </View>
@@ -42,12 +47,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: Spacing.xxxl,
-    paddingVertical: 64,
+    paddingVertical: 56,
+  },
+  iconWrapper: {
+    width: 68,
+    height: 68,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: BorderRadius.xl,
+    marginBottom: Spacing.md,
   },
   title: {
-    marginTop: Spacing.lg,
-    fontFamily: FontFamily.semiBold,
+    marginTop: Spacing.xs,
+    fontFamily: FontFamily.bold,
     fontSize: FontSize.lg,
+    letterSpacing: -0.3,
     textAlign: 'center',
   },
   subtitle: {
@@ -55,18 +69,20 @@ const styles = StyleSheet.create({
     maxWidth: 290,
     fontFamily: FontFamily.regular,
     fontSize: FontSize.sm,
-    lineHeight: 21,
+    lineHeight: 20,
     textAlign: 'center',
   },
   action: {
-    minHeight: 44,
+    minHeight: 46,
     marginTop: Spacing.xl,
-    paddingHorizontal: Spacing.xl,
-    borderRadius: 8,
+    paddingHorizontal: Spacing.xxl,
+    borderRadius: BorderRadius.button,
     justifyContent: 'center',
+    alignItems: 'center',
   },
   actionText: {
-    fontFamily: FontFamily.semiBold,
+    fontFamily: FontFamily.bold,
     fontSize: FontSize.sm,
+    letterSpacing: 0.1,
   },
 });

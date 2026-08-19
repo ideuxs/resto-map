@@ -22,7 +22,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import type { Visit } from '../types';
 import { saveVisit } from '../storage/storage';
 import { saveImageLocally } from '../storage/imageStorage';
-import { BorderRadius, FontFamily, FontSize, Spacing } from '../constants/theme';
+import { BorderRadius, FontFamily, FontSize, Shadows, Spacing } from '../constants/theme';
 import { useTheme } from '../theme/ThemeProvider';
 
 type Props = {
@@ -66,7 +66,7 @@ function parseInputDate(value: string): Date | null {
 }
 
 export default function VisitFormModal({ visible, placeId, visit, onClose }: Props) {
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const [dateText, setDateText] = useState('');
   const [dateValue, setDateValue] = useState(new Date());
@@ -99,11 +99,11 @@ export default function VisitFormModal({ visible, placeId, visit, onClose }: Pro
     setNotes(visit?.notes || '');
     setImageUris(visit?.imageUris || []);
     setDetailsOpen(Boolean(
-      visit?.dishes.length ||
-      visit?.amount != null ||
-      visit?.companions ||
-      visit?.notes ||
-      visit?.imageUris.length
+      visit?.amount != null
+      || (visit?.dishes && visit.dishes.length > 0)
+      || visit?.companions
+      || visit?.notes
+      || (visit?.imageUris && visit.imageUris.length > 0),
     ));
     setDateError('');
     setAmountError('');
@@ -111,86 +111,135 @@ export default function VisitFormModal({ visible, placeId, visit, onClose }: Pro
     setSaving(false);
   }, [visit, visible]);
 
+  const onDateChange = (_: unknown, selectedDate?: Date) => {
+    if (Platform.OS === 'android') setDatePickerOpen(false);
+    if (!selectedDate) return;
+    const endOfToday = new Date();
+    endOfToday.setHours(23, 59, 59, 999);
+    if (selectedDate > endOfToday) {
+      setDateError('La date de visite ne peut pas être dans le futur.');
+      return;
+    }
+    setDateError('');
+    setDateValue(selectedDate);
+    setDateText(dateToInput(selectedDate.toISOString()));
+    setDirty(true);
+  };
+
+  const handleDateTextInput = (value: string) => {
+    const formatted = formatDateInput(value);
+    setDateText(formatted);
+    setDirty(true);
+    if (formatted.length === 10) {
+      const parsed = parseInputDate(formatted);
+      if (!parsed) {
+        setDateError('Date invalide ou située dans le futur (format JJ/MM/AAAA).');
+      } else {
+        setDateError('');
+        setDateValue(parsed);
+      }
+    } else {
+      setDateError('');
+    }
+  };
+
   const addPhotos = async () => {
-    if (imageUris.length >= 5) return;
     Keyboard.dismiss();
+    const remaining = 5 - imageUris.length;
+    if (remaining <= 0) return;
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {
-      Alert.alert('Photos non autorisées', 'Autorisez l’accès aux photos pour les joindre à cette visite privée.');
+      Alert.alert('Photos non autorisées', 'Autorisez l’accès aux photos dans les réglages pour ajouter des souvenirs de visite.');
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
       allowsMultipleSelection: true,
-      selectionLimit: 5 - imageUris.length,
+      selectionLimit: remaining,
       quality: 0.82,
     });
-    if (result.canceled) return;
-    const saved = await Promise.all(
-      result.assets.slice(0, 5 - imageUris.length).map((asset) => saveImageLocally(asset.uri))
+    if (result.canceled || !result.assets.length) return;
+    const nextSavedUris = await Promise.all(
+      result.assets.slice(0, remaining).map((asset) => saveImageLocally(asset.uri)),
     );
-    setImageUris((current) => [...current, ...saved].slice(0, 5));
+    setImageUris((current) => [...current, ...nextSavedUris].slice(0, 5));
     setDirty(true);
   };
 
   const requestClose = () => {
-    if (saving) return;
+    Keyboard.dismiss();
     if (!dirty) {
       onClose();
       return;
     }
-    Alert.alert('Abandonner les modifications ?', 'Les informations saisies ne seront pas enregistrées.', [
-      { text: 'Continuer', style: 'cancel' },
+    Alert.alert('Abandonner la visite ?', 'Les informations saisies ne seront pas enregistrées.', [
+      { text: 'Continuer la saisie', style: 'cancel' },
       { text: 'Abandonner', style: 'destructive', onPress: onClose },
     ]);
   };
 
   const submit = async () => {
-    if (saving) return;
     Keyboard.dismiss();
-    const visitedAt = parseInputDate(dateText);
-    const normalizedAmount = amountText.trim().replace(',', '.');
-    const amount = normalizedAmount ? Number(normalizedAmount) : undefined;
-    const invalidAmount = amount != null && (!Number.isFinite(amount) || amount < 0);
+    let hasError = false;
+    let finalDate = dateValue;
 
-    setDateError(visitedAt ? '' : 'Saisissez une date valide, qui ne soit pas dans le futur.');
-    setAmountError(invalidAmount ? 'Saisissez un montant positif.' : '');
-    if (!visitedAt || invalidAmount) return;
+    if (dateText.length === 10) {
+      const parsed = parseInputDate(dateText);
+      if (!parsed) {
+        setDateError('Date invalide ou située dans le futur (JJ/MM/AAAA).');
+        hasError = true;
+      } else {
+        finalDate = parsed;
+        setDateError('');
+      }
+    } else if (dateText.length > 0) {
+      setDateError('Saisissez une date complète au format JJ/MM/AAAA.');
+      hasError = true;
+    }
+
+    let parsedAmount: number | undefined;
+    if (amountText.trim()) {
+      const normalized = Number(amountText.replace(',', '.').trim());
+      if (Number.isNaN(normalized) || normalized < 0) {
+        setAmountError('Saisissez un montant valide en euros (ex. 24,50).');
+        hasError = true;
+      } else {
+        parsedAmount = Math.round(normalized * 100) / 100;
+        setAmountError('');
+      }
+    }
+
+    if (hasError) return;
 
     setSaving(true);
-    const now = new Date().toISOString();
     try {
-      await saveVisit({
+      const dishes = dishesText
+        .split(',')
+        .map((item) => item.trim())
+        .filter(Boolean);
+
+      const nextVisit: Visit = {
         id: visit?.id || uuidv4(),
         placeId,
-        visitedAt: visitedAt.toISOString(),
+        visitedAt: finalDate.toISOString(),
         rating: rating || undefined,
-        wouldReturn: wouldReturn ?? undefined,
-        dishes: dishesText.split(',').map((dish) => dish.trim()).filter(Boolean),
-        amount,
+        wouldReturn: wouldReturn === null ? undefined : wouldReturn,
+        dishes,
+        amount: parsedAmount,
         companions: companions.trim() || undefined,
         notes: notes.trim() || undefined,
         imageUris,
-        createdAt: visit?.createdAt || now,
-        updatedAt: now,
-        dateIsEstimated: false,
-      });
-      setDirty(false);
+        createdAt: visit?.createdAt || new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+
+      await saveVisit(nextVisit);
       onClose();
     } catch {
-      Alert.alert('Visite non enregistrée', 'Réessayez dans quelques instants.');
+      Alert.alert('Erreur', 'Impossible d’enregistrer cette visite. Réessayez.');
     } finally {
       setSaving(false);
     }
-  };
-
-  const handleDateChange = (nextDate?: Date) => {
-    if (!nextDate) return;
-    setDateValue(nextDate);
-    setDateText(dateToInput(nextDate.toISOString()));
-    setDateError('');
-    setDirty(true);
-    if (Platform.OS !== 'ios') setDatePickerOpen(false);
   };
 
   return (
@@ -206,268 +255,270 @@ export default function VisitFormModal({ visible, placeId, visit, onClose }: Pro
         style={[styles.modalRoot, { backgroundColor: colors.surface }]}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        <View
-          style={[
-            styles.sheet,
-            {
-              backgroundColor: colors.surface,
-              borderColor: colors.textPrimary,
-              paddingTop: insets.top,
-              paddingBottom: insets.bottom,
-            },
-          ]}
-        >
+        <View style={[styles.sheet, { backgroundColor: colors.surface, paddingTop: insets.top }]}>
           <View style={styles.header}>
             <View style={styles.headerCopy}>
               <Text style={[styles.title, { color: colors.textPrimary }]}>
-                {visit ? 'Modifier la visite' : 'Noter une visite'}
+                {visit ? 'Modifier la visite' : 'Nouvelle visite'}
               </Text>
               <View style={styles.privateLine}>
-                <LockKeyhole size={14} color={colors.textMuted} />
-                <Text style={[styles.privateText, { color: colors.textMuted }]}>Privé sur cet appareil</Text>
+                <LockKeyhole size={13} color={colors.lavender} />
+                <Text style={[styles.privateText, { color: colors.textMuted }]}>
+                  Journal privé · non partagé
+                </Text>
               </View>
             </View>
             <Pressable
               onPress={requestClose}
-              accessibilityRole="button"
               accessibilityLabel="Fermer"
               hitSlop={8}
               style={({ pressed }) => [styles.closeButton, { opacity: pressed ? 0.55 : 1 }]}
             >
-              <X size={22} color={colors.textPrimary} />
+              <X size={20} color={colors.textPrimary} />
             </Pressable>
           </View>
 
           <ScrollView
-            style={[styles.formScroll, { backgroundColor: colors.surface }]}
+            style={styles.formScroll}
+            contentContainerStyle={styles.formContent}
             keyboardShouldPersistTaps="handled"
-            bounces={false}
-            alwaysBounceVertical={false}
-            contentInsetAdjustmentBehavior="never"
-            automaticallyAdjustContentInsets={false}
-            automaticallyAdjustKeyboardInsets
             keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
             showsVerticalScrollIndicator={false}
-            contentContainerStyle={[styles.formContent, { backgroundColor: colors.surface }]}
           >
-            <View style={[styles.essentialPanel, { backgroundColor: colors.surfaceLight, borderColor: colors.textPrimary }]}>
+            <View style={[styles.essentialPanel, { backgroundColor: isDark ? colors.surfaceLight : colors.background, borderColor: colors.border }]}>
               <View style={styles.essentialHeader}>
-                <View style={[styles.essentialIcon, { backgroundColor: colors.surface, borderColor: colors.textPrimary }]}>
-                  <NotebookPen size={20} color={colors.accent} />
+                <View style={[styles.essentialIcon, { backgroundColor: isDark ? colors.surfaceAubergine : `${colors.primary}15`, borderColor: colors.border }]}>
+                  <NotebookPen size={20} color={colors.primary} strokeWidth={2} />
                 </View>
                 <View style={styles.essentialHeaderCopy}>
                   <Text style={[styles.essentialTitle, { color: colors.textPrimary }]}>L’essentiel</Text>
-                  <Text style={[styles.essentialSubtitle, { color: colors.textMuted }]}>Trois informations pour garder un souvenir utile.</Text>
+                  <Text style={[styles.essentialSubtitle, { color: colors.textMuted }]}>
+                    Date et avis pour retrouver ce moment.
+                  </Text>
                 </View>
               </View>
-            <Text style={[styles.label, { color: colors.textPrimary }]}>Date</Text>
-            {Platform.OS === 'ios' ? (
-              <View style={[styles.datePickerShell, { backgroundColor: colors.surface, borderColor: dateError ? colors.danger : colors.textPrimary }]}>
-                <CalendarDays size={19} color={colors.accent} />
-                <View style={styles.datePickerSpacer} />
-                <DateTimePicker
-                  value={dateValue}
-                  mode="date"
-                  display="compact"
-                  maximumDate={new Date()}
-                  accentColor={colors.accent}
-                  onChange={(_, nextDate) => handleDateChange(nextDate)}
-                  accessibilityLabel="Date de la visite"
-                />
-              </View>
-            ) : (
-              <>
-                <Pressable
-                  onPress={() => setDatePickerOpen(true)}
-                  accessibilityRole="button"
-                  accessibilityLabel="Date de la visite"
-                  style={({ pressed }) => [styles.dateButton, { backgroundColor: colors.surface, borderColor: dateError ? colors.danger : colors.textPrimary, opacity: pressed ? 0.7 : 1 }]}
-                >
-                  <CalendarDays size={19} color={colors.accent} />
-                  <Text style={[styles.dateButtonText, { color: colors.textPrimary }]}>{dateText || 'JJ/MM/AAAA'}</Text>
-                </Pressable>
-                {datePickerOpen ? (
+
+              <Text style={[styles.label, { color: colors.textPrimary }]}>Date du passage</Text>
+              {Platform.OS === 'ios' ? (
+                <View style={[styles.datePickerShell, { backgroundColor: colors.surface, borderColor: dateError ? colors.danger : colors.border }]}>
+                  <CalendarDays size={18} color={colors.textMuted} />
+                  <View style={styles.datePickerSpacer} />
                   <DateTimePicker
                     value={dateValue}
                     mode="date"
                     display="default"
                     maximumDate={new Date()}
-                    onChange={(_, nextDate) => handleDateChange(nextDate)}
+                    onChange={onDateChange}
+                    textColor={colors.textPrimary}
+                    themeVariant={isDark ? 'dark' : 'light'}
+                    accentColor={colors.primary}
                   />
-                ) : null}
-              </>
-            )}
-            {dateError ? <Text accessibilityRole="alert" style={[styles.error, { color: colors.danger }]}>{dateError}</Text> : null}
-
-            <Text style={[styles.label, { color: colors.textPrimary }]}>Note</Text>
-            <View style={styles.ratingRow} accessibilityLabel="Note sur cinq">
-              {[1, 2, 3, 4, 5].map((value) => {
-                const selected = value <= rating;
-                return (
+                </View>
+              ) : (
+                <>
                   <Pressable
-                    key={value}
-                    onPress={() => {
-                      setRating(rating === value ? 0 : value);
-                      setDirty(true);
-                    }}
-                    accessibilityRole="radio"
-                    accessibilityState={{ selected: rating === value }}
-                    accessibilityLabel={`${value} étoile${value > 1 ? 's' : ''}`}
-                    style={({ pressed }) => [styles.starButton, { opacity: pressed ? 0.5 : 1 }]}
+                    onPress={() => setDatePickerOpen(true)}
+                    style={[styles.dateButton, { backgroundColor: colors.surface, borderColor: dateError ? colors.danger : colors.border }]}
                   >
-                    <Star size={27} color={colors.accentYellow} fill={selected ? colors.accentYellow : 'transparent'} />
-                  </Pressable>
-                );
-              })}
-            </View>
-
-            <Text style={[styles.label, { color: colors.textPrimary }]}>Envie d’y retourner ?</Text>
-            <View style={styles.returnRow} accessibilityLabel="Envie d’y retourner">
-              {([
-                { label: 'Oui', value: true },
-                { label: 'Non', value: false },
-                { label: 'Pas décidé', value: null },
-              ] as const).map((option) => {
-                const selected = wouldReturn === option.value;
-                return (
-                  <Pressable
-                    key={option.label}
-                    onPress={() => {
-                      setWouldReturn(option.value);
-                      setDirty(true);
-                    }}
-                    accessibilityRole="radio"
-                    accessibilityState={{ selected }}
-                    style={({ pressed }) => [
-                      styles.returnOption,
-                      {
-                        backgroundColor: selected ? `${colors.accent}18` : colors.surface,
-                        borderColor: selected ? colors.accent : colors.textPrimary,
-                        opacity: pressed ? 0.6 : 1,
-                      },
-                    ]}
-                  >
-                    <Text style={[styles.returnOptionText, { color: selected ? colors.accent : colors.textSecondary }]}>
-                      {option.label}
+                    <CalendarDays size={18} color={colors.textMuted} />
+                    <Text style={[styles.dateButtonText, { color: colors.textPrimary }]}>
+                      {dateText || 'Sélectionner la date'}
                     </Text>
                   </Pressable>
-                );
-              })}
-            </View>
-            </View>
-
-            <Pressable
-              onPress={() => setDetailsOpen((current) => !current)}
-              accessibilityRole="button"
-              accessibilityState={{ expanded: detailsOpen }}
-              style={({ pressed }) => [styles.detailsToggle, { backgroundColor: colors.surface, borderColor: colors.textPrimary, opacity: pressed ? 0.6 : 1 }]}
-            >
-              <View style={styles.detailsToggleCopy}>
-                <Text style={[styles.detailsTitle, { color: colors.textPrimary }]}>Ajouter des détails</Text>
-                <Text numberOfLines={2} ellipsizeMode="tail" style={[styles.detailsHint, { color: colors.textMuted }]}>Plats, dépense, accompagnants et notes</Text>
-              </View>
-              {detailsOpen ? <ChevronUp size={20} color={colors.textSecondary} /> : <ChevronDown size={20} color={colors.textSecondary} />}
-            </Pressable>
-
-            {detailsOpen ? (
-              <View style={styles.details}>
-                <Text style={[styles.label, styles.firstDetailLabel, { color: colors.textPrimary }]}>Plats à retenir</Text>
-                <TextInput
-                  value={dishesText}
-                  onChangeText={(value) => { setDishesText(value); setDirty(true); }}
-                  onSubmitEditing={Keyboard.dismiss}
-                  returnKeyType="done"
-                  blurOnSubmit
-                  placeholder="Ex. cookie miso, raviolis"
-                  placeholderTextColor={colors.textMuted}
-                  selectionColor={colors.accent}
-                  accessibilityLabel="Plats à retenir"
-                style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.textPrimary, color: colors.textPrimary }]}
-                />
-                <Text style={[styles.helper, { color: colors.textMuted }]}>Séparez les plats par une virgule.</Text>
-
-                <Text style={[styles.label, { color: colors.textPrimary }]}>Dépense</Text>
-                <TextInput
-                  value={amountText}
-                  onChangeText={(value) => {
-                    setAmountText(value);
-                    setAmountError('');
-                    setDirty(true);
-                  }}
-                  onSubmitEditing={Keyboard.dismiss}
-                  returnKeyType="done"
-                  blurOnSubmit
-                  placeholder="0,00 €"
-                  placeholderTextColor={colors.textMuted}
-                  selectionColor={colors.accent}
-                  keyboardType="decimal-pad"
-                  accessibilityLabel="Montant dépensé en euros"
-                  style={[
-                    styles.input,
-                    { backgroundColor: colors.surface, borderColor: amountError ? colors.danger : colors.textPrimary, color: colors.textPrimary },
-                  ]}
-                />
-                {amountError ? <Text accessibilityRole="alert" style={[styles.error, { color: colors.danger }]}>{amountError}</Text> : null}
-
-                <Text style={[styles.label, { color: colors.textPrimary }]}>Accompagnants</Text>
-                <TextInput
-                  value={companions}
-                  onChangeText={(value) => { setCompanions(value); setDirty(true); }}
-                  onSubmitEditing={Keyboard.dismiss}
-                  returnKeyType="done"
-                  blurOnSubmit
-                  placeholder="Avec qui ?"
-                  placeholderTextColor={colors.textMuted}
-                  selectionColor={colors.accent}
-                  accessibilityLabel="Accompagnants"
-                  style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.textPrimary, color: colors.textPrimary }]}
-                />
-
-                <Text style={[styles.label, { color: colors.textPrimary }]}>Notes</Text>
-                <TextInput
-                  value={notes}
-                  onChangeText={(value) => { setNotes(value); setDirty(true); }}
-                  onSubmitEditing={Keyboard.dismiss}
-                  blurOnSubmit
-                  placeholder="Ambiance, service, ce que vous voulez retenir…"
-                  placeholderTextColor={colors.textMuted}
-                  selectionColor={colors.accent}
-                  multiline
-                  textAlignVertical="top"
-                  accessibilityLabel="Notes personnelles"
-                  style={[styles.input, styles.notesInput, { backgroundColor: colors.surface, borderColor: colors.textPrimary, color: colors.textPrimary }]}
-                />
-
-                <View style={styles.photoLabelRow}>
-                  <Text style={[styles.label, { color: colors.textPrimary }]}>Photos privées</Text>
-                  <Text style={[styles.photoCount, { color: colors.textMuted }]}>{imageUris.length}/5</Text>
-                </View>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.photoRow}>
-                  {imageUris.map((uri) => (
-                    <View key={uri} style={styles.photoWrap}>
-                      <Image source={{ uri }} style={styles.photo} />
-                      <Pressable
-                        onPress={() => { setImageUris((current) => current.filter((item) => item !== uri)); setDirty(true); }}
-                        accessibilityLabel="Retirer cette photo"
-                        style={[styles.removePhoto, { backgroundColor: colors.surface, borderColor: colors.textPrimary, borderWidth: 1.5 }]}
-                      >
-                        <X size={15} color={colors.danger} />
-                      </Pressable>
-                    </View>
-                  ))}
-                  {imageUris.length < 5 ? (
-                    <Pressable
-                      onPress={addPhotos}
-                      accessibilityLabel="Ajouter des photos privées"
-                        style={[styles.addPhoto, { borderColor: colors.textPrimary, backgroundColor: colors.surface }]}
-                    >
-                      <Camera size={21} color={colors.accent} />
-                      <Text style={[styles.addPhotoText, { color: colors.accent }]}>Ajouter</Text>
-                    </Pressable>
+                  {datePickerOpen ? (
+                    <DateTimePicker
+                      value={dateValue}
+                      mode="date"
+                      display="default"
+                      maximumDate={new Date()}
+                      onChange={onDateChange}
+                    />
                   ) : null}
-                </ScrollView>
+                </>
+              )}
+              {dateError ? <Text accessibilityRole="alert" style={[styles.error, { color: colors.danger }]}>{dateError}</Text> : null}
+
+              <Text style={[styles.label, { color: colors.textPrimary }]}>Note du moment</Text>
+              <View style={styles.ratingRow}>
+                {[1, 2, 3, 4, 5].map((star) => {
+                  const active = star <= rating;
+                  return (
+                    <Pressable
+                      key={star}
+                      onPress={() => { setRating(star === rating ? 0 : star); setDirty(true); }}
+                      accessibilityLabel={`${star} étoile${star > 1 ? 's' : ''}`}
+                      hitSlop={6}
+                      style={styles.starButton}
+                    >
+                      <Star
+                        size={32}
+                        color={active ? colors.accentYellow : (isDark ? '#E6E6E6' : '#111111')}
+                        fill={active ? colors.accentYellow : 'transparent'}
+                        strokeWidth={1.8}
+                      />
+                    </Pressable>
+                  );
+                })}
               </View>
-            ) : null}
+
+              <Text style={[styles.label, { color: colors.textPrimary }]}>Envie d’y retourner ?</Text>
+              <View style={styles.returnRow}>
+                {[
+                  { label: 'Oui', value: true },
+                  { label: 'Mitigé', value: null },
+                  { label: 'Non', value: false },
+                ].map((option) => {
+                  const selected = wouldReturn === option.value;
+                  return (
+                    <Pressable
+                      key={option.label}
+                      onPress={() => { setWouldReturn(option.value as ReturnChoice); setDirty(true); }}
+                      accessibilityRole="radio"
+                      accessibilityState={{ selected }}
+                      style={({ pressed }) => [
+                        styles.returnOption,
+                        {
+                          backgroundColor: selected ? (isDark ? colors.surfaceAubergine : `${colors.primary}18`) : colors.surface,
+                          borderColor: selected ? colors.primary : colors.border,
+                          opacity: pressed ? 0.68 : 1,
+                        },
+                      ]}
+                    >
+                      <Text style={[styles.returnOptionText, { color: selected ? colors.primary : colors.textPrimary }]}>
+                        {option.label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+
+            {/* Optional details dropdown card */}
+            <View style={[styles.detailsCard, { backgroundColor: isDark ? colors.surfaceLight : colors.background, borderColor: colors.border }]}>
+              <Pressable
+                onPress={() => setDetailsOpen(!detailsOpen)}
+                accessibilityRole="button"
+                accessibilityLabel={detailsOpen ? 'Masquer les détails facultatifs' : 'Afficher les détails facultatifs'}
+                style={({ pressed }) => [
+                  styles.detailsToggle,
+                  {
+                    opacity: pressed ? 0.72 : 1,
+                  },
+                ]}
+              >
+                <View style={styles.detailsToggleCopy}>
+                  <Text style={[styles.detailsTitle, { color: colors.textPrimary }]}>
+                    Détails facultatifs
+                  </Text>
+                  <Text style={[styles.detailsHint, { color: colors.textMuted }]}>
+                    Plats, budget, accompagnants, notes et photos.
+                  </Text>
+                </View>
+                {detailsOpen ? <ChevronUp size={20} color={colors.textMuted} /> : <ChevronDown size={20} color={colors.textMuted} />}
+              </Pressable>
+
+              {detailsOpen ? (
+                <View style={[styles.detailsInner, { borderTopColor: colors.border }]}>
+                  <Text style={[styles.label, styles.firstDetailLabel, { color: colors.textPrimary }]}>Plats testés</Text>
+                  <TextInput
+                    value={dishesText}
+                    onChangeText={(value) => { setDishesText(value); setDirty(true); }}
+                    onSubmitEditing={Keyboard.dismiss}
+                    returnKeyType="done"
+                    blurOnSubmit
+                    placeholder="Ex. Risotto truffe, Tiramisu…"
+                    placeholderTextColor={colors.textMuted}
+                    selectionColor={colors.accent}
+                    accessibilityLabel="Plats testés"
+                    style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.textPrimary }]}
+                  />
+                  <Text style={[styles.fieldNotice, { color: colors.textMuted }]}>
+                    Séparez les différents plats par des virgules.
+                  </Text>
+
+                  <Text style={[styles.label, { color: colors.textPrimary }]}>Montant dépensé</Text>
+                  <TextInput
+                    value={amountText}
+                    onChangeText={(value) => { setAmountText(value); setDirty(true); }}
+                    onSubmitEditing={Keyboard.dismiss}
+                    returnKeyType="done"
+                    blurOnSubmit
+                    placeholder="0,00 €"
+                    placeholderTextColor={colors.textMuted}
+                    selectionColor={colors.accent}
+                    keyboardType="decimal-pad"
+                    accessibilityLabel="Montant dépensé en euros"
+                    style={[
+                      styles.input,
+                      { backgroundColor: colors.surface, borderColor: amountError ? colors.danger : colors.border, color: colors.textPrimary },
+                    ]}
+                  />
+                  {amountError ? <Text accessibilityRole="alert" style={[styles.error, { color: colors.danger }]}>{amountError}</Text> : null}
+
+                  <Text style={[styles.label, { color: colors.textPrimary }]}>Accompagnants</Text>
+                  <TextInput
+                    value={companions}
+                    onChangeText={(value) => { setCompanions(value); setDirty(true); }}
+                    onSubmitEditing={Keyboard.dismiss}
+                    returnKeyType="done"
+                    blurOnSubmit
+                    placeholder="Ex. Camille, Thomas…"
+                    placeholderTextColor={colors.textMuted}
+                    selectionColor={colors.accent}
+                    accessibilityLabel="Accompagnants"
+                    style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.textPrimary }]}
+                  />
+                  <Text style={[styles.fieldNotice, { color: colors.textMuted }]}>
+                    Séparez les prénoms par des virgules.
+                  </Text>
+
+                  <Text style={[styles.label, { color: colors.textPrimary }]}>Notes</Text>
+                  <TextInput
+                    value={notes}
+                    onChangeText={(value) => { setNotes(value); setDirty(true); }}
+                    onSubmitEditing={Keyboard.dismiss}
+                    blurOnSubmit
+                    placeholder="Ambiance, service, ce que vous voulez retenir…"
+                    placeholderTextColor={colors.textMuted}
+                    selectionColor={colors.accent}
+                    multiline
+                    textAlignVertical="top"
+                    accessibilityLabel="Notes personnelles"
+                    style={[styles.input, styles.notesInput, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.textPrimary }]}
+                  />
+
+                  <View style={styles.photoLabelRow}>
+                    <Text style={[styles.label, { color: colors.textPrimary }]}>Photos privées</Text>
+                    <Text style={[styles.photoCount, { color: colors.textMuted }]}>{imageUris.length}/5</Text>
+                  </View>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.photoRow}>
+                    {imageUris.map((uri) => (
+                      <View key={uri} style={styles.photoWrap}>
+                        <Image source={{ uri }} style={styles.photo} />
+                        <Pressable
+                          onPress={() => { setImageUris((current) => current.filter((item) => item !== uri)); setDirty(true); }}
+                          accessibilityLabel="Retirer cette photo"
+                          style={[styles.removePhoto, Shadows.card, { backgroundColor: colors.surface }]}
+                        >
+                          <X size={14} color={colors.danger} />
+                        </Pressable>
+                      </View>
+                    ))}
+                    {imageUris.length < 5 ? (
+                      <Pressable
+                        onPress={addPhotos}
+                        accessibilityLabel="Ajouter des photos privées"
+                        style={[styles.addPhoto, { borderColor: colors.border, backgroundColor: colors.surface }]}
+                      >
+                        <Camera size={20} color={colors.primary} />
+                        <Text style={[styles.addPhotoText, { color: colors.primary }]}>Ajouter</Text>
+                      </Pressable>
+                    ) : null}
+                  </ScrollView>
+                </View>
+              ) : null}
+            </View>
+
             <View style={[styles.footer, { backgroundColor: colors.surface }]}>
               <Pressable
                 onPress={submit}
@@ -476,10 +527,14 @@ export default function VisitFormModal({ visible, placeId, visit, onClose }: Pro
                 accessibilityState={{ disabled: saving, busy: saving }}
                 style={({ pressed }) => [
                   styles.saveButton,
-                  { backgroundColor: colors.accentPink, borderColor: colors.textPrimary, opacity: saving ? 0.42 : pressed ? 0.72 : 1 },
+                  Shadows.card,
+                  {
+                    backgroundColor: colors.primary,
+                    opacity: saving ? 0.42 : pressed ? 0.78 : 1,
+                  },
                 ]}
               >
-                <Text style={[styles.saveText, { color: colors.textOnAccent }]}>
+                <Text style={[styles.saveText, { color: colors.textOnPrimary }]}>
                   {saving ? 'Enregistrement…' : visit ? 'Enregistrer' : 'Ajouter au journal'}
                 </Text>
               </Pressable>
@@ -499,9 +554,7 @@ export default function VisitFormModal({ visible, placeId, visit, onClose }: Pro
 }
 
 const styles = StyleSheet.create({
-  modalRoot: {
-    flex: 1,
-  },
+  modalRoot: { flex: 1 },
   bottomSafeAreaFill: {
     position: 'absolute',
     right: 0,
@@ -513,22 +566,19 @@ const styles = StyleSheet.create({
     flex: 1,
     width: '100%',
     overflow: 'hidden',
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-    borderWidth: 1.5,
   },
   formScroll: { flex: 1 },
   header: {
-    minHeight: 76,
+    minHeight: 64,
     paddingHorizontal: Spacing.xl,
-    paddingTop: Spacing.lg,
-    paddingBottom: Spacing.md,
+    paddingTop: Spacing.md,
+    paddingBottom: Spacing.sm,
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: Spacing.md,
   },
   headerCopy: { flex: 1 },
-  title: { fontFamily: FontFamily.semiBold, fontSize: FontSize.xl, lineHeight: 29 },
+  title: { fontFamily: FontFamily.bold, fontSize: FontSize.xl, lineHeight: 28, letterSpacing: -0.3 },
   privateLine: { marginTop: 4, flexDirection: 'row', alignItems: 'center', gap: 6 },
   privateText: { fontFamily: FontFamily.regular, fontSize: FontSize.xs },
   closeButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
@@ -536,8 +586,8 @@ const styles = StyleSheet.create({
   essentialPanel: {
     marginTop: Spacing.sm,
     padding: Spacing.lg,
-    borderWidth: 1.5,
-    borderRadius: 12,
+    borderWidth: 1,
+    borderRadius: BorderRadius.xl,
   },
   essentialHeader: {
     flexDirection: 'row',
@@ -546,12 +596,12 @@ const styles = StyleSheet.create({
     paddingBottom: Spacing.xs,
   },
   essentialIcon: {
-    width: 44,
-    height: 44,
+    width: 40,
+    height: 40,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1.5,
-    borderRadius: 8,
+    borderWidth: 1,
+    borderRadius: BorderRadius.md,
   },
   essentialHeaderCopy: { flex: 1, minWidth: 0 },
   essentialTitle: { fontFamily: FontFamily.semiBold, fontSize: FontSize.md },
@@ -559,84 +609,105 @@ const styles = StyleSheet.create({
   label: {
     marginTop: Spacing.lg,
     marginBottom: Spacing.sm,
-    fontFamily: FontFamily.medium,
+    fontFamily: FontFamily.semiBold,
     fontSize: FontSize.sm,
   },
   input: {
-    minHeight: 52,
+    minHeight: 48,
     paddingHorizontal: Spacing.md,
-    borderWidth: 1.5,
-    borderRadius: 8,
+    borderWidth: 1,
+    borderRadius: BorderRadius.md,
     fontFamily: FontFamily.regular,
     fontSize: FontSize.md,
   },
   datePickerShell: {
-    minHeight: 52,
+    minHeight: 48,
     paddingHorizontal: Spacing.md,
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.sm,
-    borderWidth: 1.5,
-    borderRadius: 8,
+    borderWidth: 1,
+    borderRadius: BorderRadius.md,
   },
   datePickerSpacer: { flex: 1 },
   dateButton: {
-    minHeight: 52,
+    minHeight: 48,
     paddingHorizontal: Spacing.md,
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.sm,
-    borderWidth: 1.5,
-    borderRadius: 8,
+    borderWidth: 1,
+    borderRadius: BorderRadius.md,
   },
   dateButtonText: { fontFamily: FontFamily.regular, fontSize: FontSize.md },
-  ratingRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  ratingRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: Spacing.sm },
   starButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   returnRow: { flexDirection: 'row', gap: Spacing.sm },
   returnOption: {
-    minHeight: 48,
+    minHeight: 44,
     flex: 1,
     paddingHorizontal: Spacing.xs,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1.5,
-    borderRadius: 8,
+    borderWidth: 1,
+    borderRadius: BorderRadius.md,
   },
-  returnOptionText: { fontFamily: FontFamily.medium, fontSize: FontSize.sm, textAlign: 'center' },
+  returnOptionText: { fontFamily: FontFamily.semiBold, fontSize: FontSize.sm, textAlign: 'center' },
+  detailsCard: {
+    marginTop: Spacing.xl,
+    borderWidth: 1,
+    borderRadius: BorderRadius.xl,
+    overflow: 'hidden',
+  },
   detailsToggle: {
-    minHeight: 64,
-    marginTop: Spacing.xxl,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
+    minHeight: 58,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.md,
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.md,
-    borderWidth: 1.5,
-    borderRadius: 10,
   },
   detailsToggleCopy: { flex: 1, minWidth: 0 },
-  detailsTitle: { fontFamily: FontFamily.semiBold, fontSize: FontSize.sm },
+  detailsTitle: { fontFamily: FontFamily.semiBold, fontSize: FontSize.md },
   detailsHint: { marginTop: 2, fontFamily: FontFamily.regular, fontSize: FontSize.xs, lineHeight: 18 },
-  details: { paddingBottom: Spacing.sm },
-  firstDetailLabel: { marginTop: Spacing.xl },
-  notesInput: { minHeight: 112, paddingTop: Spacing.md },
+  detailsInner: {
+    paddingHorizontal: Spacing.lg,
+    paddingBottom: Spacing.lg,
+    borderTopWidth: 1,
+  },
+  firstDetailLabel: { marginTop: Spacing.md },
+  fieldNotice: {
+    marginTop: 5,
+    fontFamily: FontFamily.regular,
+    fontSize: FontSize.xs,
+    lineHeight: 16,
+  },
+  notesInput: { minHeight: 100, paddingTop: Spacing.md },
   photoLabelRow: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between' },
   photoCount: { fontFamily: FontFamily.regular, fontSize: FontSize.xs },
   photoRow: { gap: Spacing.sm, paddingBottom: Spacing.sm },
-  photoWrap: { width: 84, height: 84 },
-  photo: { width: 84, height: 84, borderRadius: BorderRadius.md },
-  removePhoto: { position: 'absolute', top: -5, right: -5, width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
-  addPhoto: { width: 84, height: 84, borderWidth: 1.5, borderRadius: 8, alignItems: 'center', justifyContent: 'center', gap: 4 },
+  photoWrap: { width: 80, height: 80 },
+  photo: { width: 80, height: 80, borderRadius: BorderRadius.md },
+  removePhoto: {
+    position: 'absolute',
+    top: -6,
+    right: -6,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  addPhoto: { width: 80, height: 80, borderWidth: 1, borderRadius: BorderRadius.md, alignItems: 'center', justifyContent: 'center', gap: 4 },
   addPhotoText: { fontFamily: FontFamily.semiBold, fontSize: FontSize.xs },
   helper: { marginTop: 6, fontFamily: FontFamily.regular, fontSize: FontSize.xs, lineHeight: 18 },
   error: { marginTop: 6, fontFamily: FontFamily.medium, fontSize: FontSize.xs, lineHeight: 18 },
-  footer: { marginTop: 'auto', paddingTop: Spacing.xxl, paddingBottom: Spacing.sm },
+  footer: { marginTop: 'auto', paddingTop: Spacing.xl, paddingBottom: Spacing.sm },
   saveButton: {
-    minHeight: 52,
+    minHeight: 50,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 8,
-    borderWidth: 1.5,
+    borderRadius: BorderRadius.button,
   },
-  saveText: { fontFamily: FontFamily.semiBold, fontSize: FontSize.md },
+  saveText: { fontFamily: FontFamily.bold, fontSize: FontSize.md, letterSpacing: 0.1 },
 });

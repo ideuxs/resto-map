@@ -114,15 +114,15 @@ export default function MapScreen() {
   };
 
   const mapStyle = isDark ? [
-    { elementType: 'geometry', stylers: [{ color: '#17121E' }] },
-    { elementType: 'labels.text.fill', stylers: [{ color: '#C9A5DF' }] },
-    { elementType: 'labels.text.stroke', stylers: [{ color: '#100D18' }] },
-    { featureType: 'poi', elementType: 'geometry', stylers: [{ color: '#211A2B' }] },
-    { featureType: 'poi.park', elementType: 'geometry', stylers: [{ color: '#202A28' }] },
-    { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#332940' }] },
-    { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#49385B' }] },
-    { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#171D38' }] },
-    { featureType: 'transit', elementType: 'geometry', stylers: [{ color: '#292033' }] },
+    { elementType: 'geometry', stylers: [{ color: '#150D18' }] },
+    { elementType: 'labels.text.fill', stylers: [{ color: '#D9BDDE' }] },
+    { elementType: 'labels.text.stroke', stylers: [{ color: '#150D18' }] },
+    { featureType: 'poi', elementType: 'geometry', stylers: [{ color: '#1F1222' }] },
+    { featureType: 'poi.park', elementType: 'geometry', stylers: [{ color: '#18241D' }] },
+    { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#2B1A30' }] },
+    { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#3B2342' }] },
+    { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#1A1830' }] },
+    { featureType: 'transit', elementType: 'geometry', stylers: [{ color: '#25162A' }] },
   ] : [];
 
   const selectedCategory = selectedRestaurant ? (CATEGORIES[selectedRestaurant.category] || CATEGORIES.autre) : null;
@@ -140,7 +140,7 @@ export default function MapScreen() {
     <View onLayout={onLayout} style={[style, { overflow: 'hidden' }]}>
       <BlurView
         pointerEvents="none"
-        intensity={isDark ? 58 : 72}
+        intensity={isDark ? 65 : 80}
         tint={isDark ? 'dark' : 'light'}
         experimentalBlurMethod={Platform.OS === 'android' ? 'dimezisBlurView' : undefined}
         style={StyleSheet.absoluteFillObject}
@@ -188,7 +188,7 @@ export default function MapScreen() {
               ) : (
                 <View style={styles.markerWrap}>
                   <View style={[styles.personalMarker, { backgroundColor: colors.surface, borderColor: markerColor }]}>
-                    <Icon size={18} color={markerColor} strokeWidth={2.2} />
+                    <Icon size={16} color={markerColor} strokeWidth={2.2} />
                     {friendSource ? <View style={[styles.friendBadge, { backgroundColor: getSourceColor(sourceKey, isDark ? 'dark' : 'light'), borderColor: colors.surface }]} /> : null}
                   </View>
                   <View style={[styles.markerTail, { borderTopColor: markerColor }]} />
@@ -200,8 +200,8 @@ export default function MapScreen() {
         {routeCoordinates.length > 1 ? (
           <Polyline
             coordinates={routeCoordinates}
-            strokeColor={colors.accentPink}
-            strokeWidth={4}
+            strokeColor={colors.primary}
+            strokeWidth={3.5}
             lineCap="round"
             lineJoin="round"
             zIndex={2}
@@ -215,10 +215,10 @@ export default function MapScreen() {
             const nextHeight = Math.round(nativeEvent.layout.height);
             setMiniCardHeight((currentHeight) => currentHeight === nextHeight ? currentHeight : nextHeight);
           }}
-          style={[styles.miniCard, Shadows.hard, { bottom: insets.bottom + 74, backgroundColor: colors.glass, borderColor: colors.textPrimary }]}
+          style={[styles.miniCard, Shadows.floating, { bottom: insets.bottom + 74, backgroundColor: colors.glass, borderColor: colors.border }]}
         >
           <View style={styles.miniHeader}>
-            <View style={[styles.miniCategoryIcon, { backgroundColor: `${selectedSourceColor}16` }]}>
+            <View style={[styles.miniCategoryIcon, { backgroundColor: isDark ? colors.surfaceLight : `${selectedSourceColor}15` }]}>
               <selectedCategory.icon size={18} color={selectedSourceColor} />
             </View>
             <View style={styles.miniCopy}>
@@ -229,15 +229,15 @@ export default function MapScreen() {
               <X size={18} color={colors.textMuted} />
             </Pressable>
           </View>
-          <View style={styles.routeSummary}>
+          <View style={[styles.routeSummary, { backgroundColor: isDark ? colors.surfaceLight : `${colors.primary}08` }]}>
             <View style={styles.routeSummaryItem}>
-              {travelLoading ? <ActivityIndicator size="small" color={colors.accent} /> : <CarFront size={16} color={colors.accent} />}
+              {travelLoading ? <ActivityIndicator size="small" color={colors.primary} /> : <CarFront size={16} color={colors.primary} />}
               <Text style={[styles.routeSummaryLabel, { color: colors.textMuted }]}>Voiture</Text>
               <Text style={[styles.routeSummaryValue, { color: colors.textPrimary }]}>{travelLoading ? 'Calcul…' : travel?.driving || (userLocation ? `${distanceKm(userLocation, selectedRestaurant.location!).toFixed(1).replace('.', ',')} km` : 'Position requise')}</Text>
             </View>
-            <View style={[styles.routeSummaryDivider, { backgroundColor: colors.borderLight }]} />
+            <View style={[styles.routeSummaryDivider, { backgroundColor: colors.border }]} />
             <View style={styles.routeSummaryItem}>
-              <Navigation2 size={16} color={colors.lavender} />
+              <Navigation2 size={16} color={colors.link} />
               <Text style={[styles.routeSummaryLabel, { color: colors.textMuted }]}>Transports</Text>
               <Text style={[styles.routeSummaryValue, { color: colors.textPrimary }]}>{travelLoading ? '…' : travel?.transit || '—'}</Text>
             </View>
@@ -246,24 +246,24 @@ export default function MapScreen() {
             <Text style={[styles.miniRouteHint, { color: colors.textMuted }]}>{userLocation ? 'Tracé affiché sur la carte' : 'Autorisez la position pour afficher le tracé'}</Text>
             <Pressable
               onPress={() => navigation.navigate('restaurants', { screen: 'RestaurantDetail', params: { restaurantId: selectedRestaurant.id } })}
-              style={({ pressed }) => [styles.miniOpen, { opacity: pressed ? 0.55 : 1 }]}
+              style={({ pressed }) => [styles.miniOpen, { opacity: pressed ? 0.65 : 1 }]}
             >
-              <Text style={[styles.miniOpenText, { color: colors.accent }]}>Ouvrir la fiche</Text>
-              <Navigation2 size={15} color={colors.accent} />
+              <Text style={[styles.miniOpenText, { color: colors.link }]}>Ouvrir la fiche</Text>
+              <Navigation2 size={14} color={colors.link} />
             </Pressable>
           </View>
         </GlassPanel>
       ) : null}
 
-      <GlassPanel style={[styles.topPanel, Shadows.hard, { top: insets.top + Spacing.sm, backgroundColor: colors.glass, borderColor: colors.textPrimary }]}>
+      <GlassPanel style={[styles.topPanel, Shadows.card, { top: insets.top + Spacing.sm, backgroundColor: colors.glass, borderColor: colors.border }]}>
         <View style={styles.mapTitleRow}>
           <View>
             <Text style={[styles.title, { color: colors.textPrimary }]}>Carte</Text>
             <Text style={[styles.count, { color: colors.textSecondary }]}>{visible.length} adresse{visible.length !== 1 ? 's' : ''} géolocalisée{visible.length !== 1 ? 's' : ''}</Text>
           </View>
-          <MapPinned size={23} color={colors.accent} />
+          <MapPinned size={22} color={colors.primary} />
         </View>
-        <View style={[styles.sourceTabs, { backgroundColor: colors.surfaceMuted }]}>
+        <View style={[styles.sourceTabs, { backgroundColor: isDark ? colors.surfaceLight : colors.surfaceMuted }]}>
           {([
             ['all', 'Tout'], ['personal', 'Moi'], ['friends', 'Amis'],
           ] as const).map(([value, label]) => {
@@ -274,9 +274,20 @@ export default function MapScreen() {
                 onPress={() => setSource(value)}
                 accessibilityRole="tab"
                 accessibilityState={{ selected }}
-                style={({ pressed }) => [styles.sourceTab, selected && { backgroundColor: colors.surface, borderColor: colors.textPrimary, borderWidth: 1.5 }, { opacity: pressed ? 0.6 : 1 }]}
+                style={({ pressed }) => [
+                  styles.sourceTab,
+                  selected && [
+                    Shadows.hairline,
+                    {
+                      backgroundColor: colors.surface,
+                      borderColor: colors.border,
+                      borderWidth: 1,
+                    },
+                  ],
+                  { opacity: pressed ? 0.7 : 1 },
+                ]}
               >
-                <Text style={[styles.sourceTabText, { color: selected ? colors.textPrimary : colors.textMuted }]}>{label}</Text>
+                <Text style={[styles.sourceTabText, { color: selected ? colors.primary : colors.textMuted, fontFamily: selected ? FontFamily.bold : FontFamily.medium }]}>{label}</Text>
               </Pressable>
             );
           })}
@@ -284,8 +295,8 @@ export default function MapScreen() {
       </GlassPanel>
 
       {!visible.length ? (
-        <View pointerEvents="none" style={[styles.empty, Shadows.hard, { backgroundColor: colors.surface, borderColor: colors.textPrimary }]}>
-          <MapPinned size={28} color={colors.accent} />
+        <View pointerEvents="none" style={[styles.empty, Shadows.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <MapPinned size={26} color={colors.primary} />
           <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>Aucune adresse sur cette vue</Text>
           <Text style={[styles.emptyText, { color: colors.textMuted }]}>Ajoutez une position ou changez le filtre.</Text>
         </View>
@@ -297,16 +308,16 @@ export default function MapScreen() {
         accessibilityLabel="Me localiser"
         style={({ pressed }) => [
           styles.locate,
-          Shadows.hard,
+          Shadows.floating,
           {
             bottom: insets.bottom + (selectedRestaurant ? (miniCardHeight ? miniCardHeight + 74 + Spacing.md : 280) : 76),
             backgroundColor: colors.glass,
-            borderColor: colors.textPrimary,
-            opacity: pressed ? 0.65 : 1,
+            borderColor: colors.border,
+            opacity: pressed ? 0.72 : 1,
           },
         ]}
       >
-        <LocateFixed size={21} color={userLocation ? colors.accent : colors.textMuted} />
+        <LocateFixed size={20} color={userLocation ? colors.primary : colors.textMuted} />
       </Pressable>
     </View>
   );
@@ -314,45 +325,37 @@ export default function MapScreen() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1 },
-  topPanel: { position: 'absolute', left: Spacing.lg, right: Spacing.lg, padding: Spacing.md, borderWidth: 1.5, borderRadius: 14 },
+  topPanel: { position: 'absolute', left: Spacing.lg, right: Spacing.lg, padding: Spacing.md, borderWidth: 1, borderRadius: BorderRadius.xl },
   mapTitleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  title: { fontFamily: FontFamily.semiBold, fontSize: FontSize.xl, letterSpacing: -0.5 },
-  count: { marginTop: 2, fontFamily: FontFamily.regular, fontSize: FontSize.xs },
-  sourceTabs: { marginTop: Spacing.md, padding: 3, flexDirection: 'row', borderRadius: BorderRadius.md },
-  sourceTab: { flex: 1, minHeight: 36, alignItems: 'center', justifyContent: 'center', borderWidth: StyleSheet.hairlineWidth, borderColor: 'transparent', borderRadius: 8 },
-  sourceTabText: { fontFamily: FontFamily.semiBold, fontSize: FontSize.xs },
+  title: { fontFamily: FontFamily.bold, fontSize: FontSize.xl, letterSpacing: -0.4 },
+  count: { marginTop: 1, fontFamily: FontFamily.regular, fontSize: FontSize.xs },
+  sourceTabs: { marginTop: Spacing.sm, padding: 3, flexDirection: 'row', borderRadius: BorderRadius.md },
+  sourceTab: { flex: 1, minHeight: 34, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'transparent', borderRadius: BorderRadius.sm },
+  sourceTabText: { fontSize: FontSize.xs },
   markerWrap: { alignItems: 'center' },
-  personalMarker: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center', borderWidth: 3 },
-  friendBadge: { position: 'absolute', top: -4, right: -4, width: 12, height: 12, borderRadius: 6, borderWidth: 2 },
-  friendMarker: { width: 38, height: 38, borderRadius: 10, alignItems: 'center', justifyContent: 'center', borderWidth: 3 },
+  personalMarker: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', borderWidth: 2.5 },
+  friendBadge: { position: 'absolute', top: -3, right: -3, width: 10, height: 10, borderRadius: 5, borderWidth: 1.5 },
+  friendMarker: { width: 36, height: 36, borderRadius: 8, alignItems: 'center', justifyContent: 'center', borderWidth: 2.5 },
   friendInitials: { color: '#FFFFFF', fontFamily: FontFamily.bold, fontSize: FontSize.xs },
-  markerTail: { width: 0, height: 0, marginTop: -2, borderLeftWidth: 6, borderRightWidth: 6, borderTopWidth: 8, borderLeftColor: 'transparent', borderRightColor: 'transparent' },
-  callout: { width: 210, padding: Spacing.md, borderWidth: 1, borderRadius: BorderRadius.md },
-  calloutName: { fontFamily: FontFamily.semiBold, fontSize: FontSize.md, lineHeight: 21 },
-  calloutCategory: { marginTop: 3, fontFamily: FontFamily.regular, fontSize: FontSize.xs },
-  calloutSource: { marginTop: Spacing.sm, flexDirection: 'row', alignItems: 'center', gap: 5 },
-  calloutSourceText: { fontFamily: FontFamily.medium, fontSize: FontSize.xs },
-  calloutTravel: { marginTop: Spacing.sm, flexDirection: 'row', alignItems: 'center', gap: 5 },
-  calloutTravelText: { fontFamily: FontFamily.medium, fontSize: FontSize.xs },
-  calloutAction: { marginTop: Spacing.md, fontFamily: FontFamily.semiBold, fontSize: FontSize.sm },
-  miniCard: { position: 'absolute', left: Spacing.lg, right: Spacing.lg, padding: Spacing.md, borderWidth: 1.5, borderRadius: 14, zIndex: 3 },
+  markerTail: { width: 0, height: 0, marginTop: -2, borderLeftWidth: 5, borderRightWidth: 5, borderTopWidth: 7, borderLeftColor: 'transparent', borderRightColor: 'transparent' },
+  miniCard: { position: 'absolute', left: Spacing.lg, right: Spacing.lg, padding: Spacing.md, borderWidth: 1, borderRadius: BorderRadius.xl, zIndex: 3 },
   miniHeader: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
-  miniCategoryIcon: { width: 34, height: 34, alignItems: 'center', justifyContent: 'center', borderRadius: 10 },
+  miniCategoryIcon: { width: 34, height: 34, alignItems: 'center', justifyContent: 'center', borderRadius: BorderRadius.md },
   miniCopy: { flex: 1, minWidth: 0 },
-  miniName: { fontFamily: FontFamily.semiBold, fontSize: FontSize.md },
-  miniCategory: { marginTop: 2, fontFamily: FontFamily.regular, fontSize: FontSize.xs },
-  miniClose: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
-  routeSummary: { minHeight: 48, marginTop: Spacing.md, paddingVertical: Spacing.sm, flexDirection: 'row', alignItems: 'center', borderRadius: BorderRadius.md, backgroundColor: 'rgba(124, 76, 155, 0.08)' },
-  routeSummaryItem: { flex: 1, minWidth: 0, paddingHorizontal: Spacing.sm, flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', columnGap: 5 },
+  miniName: { fontFamily: FontFamily.bold, fontSize: FontSize.md, letterSpacing: -0.2 },
+  miniCategory: { marginTop: 1, fontFamily: FontFamily.regular, fontSize: FontSize.xs },
+  miniClose: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
+  routeSummary: { minHeight: 46, marginTop: Spacing.md, paddingVertical: Spacing.xs, flexDirection: 'row', alignItems: 'center', borderRadius: BorderRadius.md },
+  routeSummaryItem: { flex: 1, minWidth: 0, paddingHorizontal: Spacing.sm, flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', columnGap: 4 },
   routeSummaryLabel: { fontFamily: FontFamily.regular, fontSize: FontSize.xs },
-  routeSummaryValue: { width: '100%', paddingLeft: 21, marginTop: 2, fontFamily: FontFamily.semiBold, fontSize: FontSize.xs },
-  routeSummaryDivider: { width: StyleSheet.hairlineWidth, height: 30 },
-  miniActions: { minHeight: 34, marginTop: Spacing.sm, flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
+  routeSummaryValue: { width: '100%', paddingLeft: 20, marginTop: 1, fontFamily: FontFamily.bold, fontSize: FontSize.xs },
+  routeSummaryDivider: { width: 1, height: 28 },
+  miniActions: { minHeight: 32, marginTop: Spacing.xs, flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
   miniRouteHint: { flex: 1, fontFamily: FontFamily.regular, fontSize: FontSize.xs },
-  miniOpen: { minWidth: 116, minHeight: 40, paddingHorizontal: Spacing.sm, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 4 },
+  miniOpen: { minWidth: 110, minHeight: 36, paddingHorizontal: Spacing.xs, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 4 },
   miniOpenText: { flexShrink: 0, fontFamily: FontFamily.semiBold, fontSize: FontSize.xs },
-  locate: { position: 'absolute', right: Spacing.lg, width: 48, height: 48, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderRadius: 8, zIndex: 10 },
-  empty: { position: 'absolute', left: Spacing.xl, right: Spacing.xl, top: '44%', padding: Spacing.xl, alignItems: 'center', borderWidth: 1, borderRadius: BorderRadius.lg },
-  emptyTitle: { marginTop: Spacing.md, fontFamily: FontFamily.semiBold, fontSize: FontSize.md },
-  emptyText: { marginTop: 4, fontFamily: FontFamily.regular, fontSize: FontSize.xs },
+  locate: { position: 'absolute', right: Spacing.lg, width: 44, height: 44, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderRadius: BorderRadius.md, zIndex: 10 },
+  empty: { position: 'absolute', left: Spacing.xl, right: Spacing.xl, top: '44%', padding: Spacing.xl, alignItems: 'center', borderWidth: 1, borderRadius: BorderRadius.xl },
+  emptyTitle: { marginTop: Spacing.md, fontFamily: FontFamily.bold, fontSize: FontSize.md },
+  emptyText: { marginTop: 3, fontFamily: FontFamily.regular, fontSize: FontSize.xs },
 });

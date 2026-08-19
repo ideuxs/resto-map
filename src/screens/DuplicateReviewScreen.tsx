@@ -20,7 +20,7 @@ import { BorderRadius, FontFamily, FontSize, Shadows, Spacing } from '../constan
 type Props = NativeStackScreenProps<CollectionsStackParamList, 'DuplicateReview'>;
 
 export default function DuplicateReviewScreen({ navigation }: Props) {
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const [reviews, setReviews] = useState<DuplicateReview[]>([]);
   const [decisions, setDecisions] = useState<DuplicateDecision[]>([]);
@@ -44,9 +44,9 @@ export default function DuplicateReviewScreen({ navigation }: Props) {
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.background }]}>
-      <View style={[styles.topBar, { paddingTop: insets.top, borderBottomColor: colors.border }]}>
+      <View style={[styles.topBar, { paddingTop: insets.top }]}>
         <Pressable onPress={() => navigation.goBack()} accessibilityLabel="Retour" style={styles.topAction}>
-          <ArrowLeft size={23} color={colors.textPrimary} />
+          <ArrowLeft size={22} color={colors.textPrimary} />
         </Pressable>
         <Text style={[styles.topTitle, { color: colors.textPrimary }]}>Doublons à vérifier</Text>
         <View style={styles.topAction} />
@@ -61,15 +61,15 @@ export default function DuplicateReviewScreen({ navigation }: Props) {
         renderItem={({ item }) => {
           const incoming = byReference(item.incomingReferenceId);
           return (
-            <View style={[styles.review, Shadows.hard, { backgroundColor: colors.surface, borderColor: colors.textPrimary }]}>
-              <Text style={[styles.eyebrow, { color: colors.textMuted }]}>Adresse importée</Text>
+            <View style={[styles.review, Shadows.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <Text style={[styles.eyebrow, { color: colors.textMuted }]}>ADRESSE IMPORTÉE</Text>
               <Text style={[styles.name, { color: colors.textPrimary }]}>{incoming?.name || 'Adresse importée'}</Text>
               <Text style={[styles.address, { color: colors.textSecondary }]}>{incoming?.address || 'Adresse non renseignée'}</Text>
-              <Text style={[styles.eyebrow, { color: colors.textMuted }]}>Peut correspondre à</Text>
+              <Text style={[styles.eyebrow, { color: colors.textMuted, marginTop: Spacing.md }]}>PEUT CORRESPONDRE À</Text>
               {item.candidatePlaceIds.map((placeId) => {
                 const candidate = byPlace(placeId);
                 return (
-                  <View key={placeId} style={[styles.candidate, { backgroundColor: colors.surfaceLight }]}>
+                  <View key={placeId} style={[styles.candidate, { backgroundColor: isDark ? colors.surfaceLight : colors.background, borderColor: colors.border }]}>
                     <View style={styles.copy}>
                       <Text style={[styles.candidateName, { color: colors.textPrimary }]}>{candidate?.name || 'Lieu existant'}</Text>
                       <Text style={[styles.address, { color: colors.textMuted }]} numberOfLines={2}>{candidate?.address}</Text>
@@ -77,35 +77,39 @@ export default function DuplicateReviewScreen({ navigation }: Props) {
                     <Pressable
                       onPress={async () => { await resolveDuplicate(item.id, placeId); await load(); }}
                       accessibilityLabel={`Relier à ${candidate?.name || 'ce lieu'}`}
-                      style={[styles.iconButton, { backgroundColor: colors.accent }]}
+                      style={({ pressed }) => [
+                        styles.iconButton,
+                        Shadows.card,
+                        { backgroundColor: colors.primary, opacity: pressed ? 0.78 : 1 },
+                      ]}
                     >
-                      <Link2 size={18} color={colors.textOnAccent} />
+                      <Link2 size={18} color={colors.textOnPrimary} />
                     </Pressable>
                   </View>
                 );
               })}
               <Pressable
                 onPress={async () => { await resolveDuplicate(item.id, null); await load(); }}
-                style={styles.separateButton}
+                style={({ pressed }) => [styles.separateButton, { opacity: pressed ? 0.65 : 1 }]}
               >
-                <Split size={18} color={colors.textSecondary} />
-                <Text style={[styles.separateText, { color: colors.textSecondary }]}>Conserver séparément</Text>
+                <Split size={17} color={colors.link} />
+                <Text style={[styles.separateText, { color: colors.link }]}>Conserver séparément</Text>
               </Pressable>
             </View>
           );
         }}
         ListEmptyComponent={<EmptyState icon={Link2} title="Tout est clair" subtitle="Aucun rapprochement ne demande votre confirmation." />}
         ListFooterComponent={decisions.length ? (
-          <View style={[styles.history, Shadows.hard, { backgroundColor: colors.surface, borderColor: colors.textPrimary }]}>
+          <View style={[styles.history, Shadows.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <Text style={[styles.historyTitle, { color: colors.textPrimary }]}>Décisions récentes</Text>
             {decisions.slice(0, 5).map((decision) => (
               <Pressable
                 key={decision.id}
                 onPress={async () => { await undoDuplicate(decision.id); await load(); }}
-                style={styles.undoRow}
+                style={({ pressed }) => [styles.undoRow, { opacity: pressed ? 0.65 : 1 }]}
               >
-                <RotateCcw size={17} color={colors.accent} />
-                <Text style={[styles.undoText, { color: colors.accent }]}>Annuler « {decision.resolution === 'same' ? 'relier' : 'séparer'} »</Text>
+                <RotateCcw size={16} color={colors.link} />
+                <Text style={[styles.undoText, { color: colors.link }]}>Annuler « {decision.resolution === 'same' ? 'relier' : 'séparer'} »</Text>
               </Pressable>
             ))}
           </View>
@@ -117,22 +121,22 @@ export default function DuplicateReviewScreen({ navigation }: Props) {
 
 const styles = StyleSheet.create({
   screen: { flex: 1 },
-  topBar: { minHeight: 54, paddingHorizontal: Spacing.sm, flexDirection: 'row', alignItems: 'flex-end', paddingBottom: 6, borderBottomWidth: 0 },
+  topBar: { minHeight: 50, paddingHorizontal: Spacing.sm, flexDirection: 'row', alignItems: 'center' },
   topAction: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-  topTitle: { flex: 1, paddingBottom: 12, textAlign: 'center', fontFamily: FontFamily.semiBold, fontSize: FontSize.md },
-  intro: { marginBottom: Spacing.xl, fontFamily: FontFamily.regular, fontSize: FontSize.sm, lineHeight: 21 },
-  review: { marginBottom: Spacing.lg, padding: Spacing.lg, borderWidth: 1.5, borderRadius: 12 },
-  eyebrow: { marginTop: Spacing.sm, marginBottom: 4, fontFamily: FontFamily.semiBold, fontSize: FontSize.xs, textTransform: 'uppercase', letterSpacing: 0.7 },
-  name: { fontFamily: FontFamily.semiBold, fontSize: FontSize.lg },
-  address: { fontFamily: FontFamily.regular, fontSize: FontSize.xs, lineHeight: 18 },
-  candidate: { minHeight: 68, marginTop: Spacing.sm, padding: Spacing.sm, flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, borderRadius: 8 },
+  topTitle: { flex: 1, textAlign: 'center', fontFamily: FontFamily.bold, fontSize: FontSize.md, letterSpacing: -0.2 },
+  intro: { marginBottom: Spacing.lg, fontFamily: FontFamily.regular, fontSize: FontSize.sm, lineHeight: 20 },
+  review: { marginBottom: Spacing.lg, padding: Spacing.lg, borderWidth: 1, borderRadius: BorderRadius.xl },
+  eyebrow: { marginBottom: 2, fontFamily: FontFamily.bold, fontSize: FontSize.xs - 1, letterSpacing: 0.96 },
+  name: { fontFamily: FontFamily.bold, fontSize: FontSize.lg, letterSpacing: -0.2 },
+  address: { marginTop: 2, fontFamily: FontFamily.regular, fontSize: FontSize.xs, lineHeight: 18 },
+  candidate: { minHeight: 64, marginTop: Spacing.sm, padding: Spacing.md, flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, borderWidth: 1, borderRadius: BorderRadius.lg },
   copy: { flex: 1 },
   candidateName: { fontFamily: FontFamily.semiBold, fontSize: FontSize.sm },
-  iconButton: { width: 44, height: 44, borderRadius: BorderRadius.md, alignItems: 'center', justifyContent: 'center' },
+  iconButton: { width: 40, height: 40, borderRadius: BorderRadius.md, alignItems: 'center', justifyContent: 'center' },
   separateButton: { minHeight: 44, marginTop: Spacing.sm, flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
   separateText: { fontFamily: FontFamily.semiBold, fontSize: FontSize.sm },
-  history: { marginTop: Spacing.xxl, padding: Spacing.lg, borderWidth: 1.5, borderRadius: 12 },
-  historyTitle: { marginBottom: Spacing.sm, fontFamily: FontFamily.semiBold, fontSize: FontSize.md },
-  undoRow: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
+  history: { marginTop: Spacing.xl, padding: Spacing.lg, borderWidth: 1, borderRadius: BorderRadius.xl },
+  historyTitle: { marginBottom: Spacing.sm, fontFamily: FontFamily.bold, fontSize: FontSize.md },
+  undoRow: { minHeight: 40, flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
   undoText: { fontFamily: FontFamily.medium, fontSize: FontSize.sm },
 });

@@ -157,14 +157,14 @@ export default function CollectionDetailScreen({ route, navigation }: Props) {
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.background }]}>
-      <View style={[styles.topBar, { paddingTop: insets.top, backgroundColor: colors.background, borderColor: colors.border }]}>
+      <View style={[styles.topBar, { paddingTop: insets.top, backgroundColor: colors.background }]}>
         <Pressable onPress={() => navigation.goBack()} accessibilityLabel="Retour" style={styles.topAction}>
-          <ArrowLeft size={23} color={colors.textPrimary} />
+          <ArrowLeft size={22} color={colors.textPrimary} />
         </Pressable>
         <Text style={[styles.topTitle, { color: colors.textPrimary }]} numberOfLines={1}>{collection.name}</Text>
         {!imported ? (
           <Pressable onPress={openShareModal} accessibilityRole="button" accessibilityLabel="Partager la liste" style={styles.topAction}>
-            <Share2 size={21} color={colors.textPrimary} />
+            <Share2 size={20} color={colors.textPrimary} />
           </Pressable>
         ) : <View style={styles.topAction} />}
       </View>
@@ -178,13 +178,17 @@ export default function CollectionDetailScreen({ route, navigation }: Props) {
           </View>
         )}
         ListHeaderComponent={(
-          <View style={[styles.header, Shadows.hard, { backgroundColor: colors.surface, borderColor: colors.textPrimary }]}>
-            <View style={[styles.collectionIcon, { backgroundColor: imported ? `${sourceColor}18` : colors.surfaceMuted, borderColor: imported ? sourceColor : colors.textPrimary }]}>
-              {collection.imageUri ? <Image source={{ uri: collection.imageUri }} style={styles.collectionImage} contentFit="cover" /> : <Icon size={30} color={imported ? sourceColor : colors.textPrimary} strokeWidth={2} />}
+          <View style={[styles.header, Shadows.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <View style={[styles.collectionIcon, { backgroundColor: imported ? (isDark ? colors.surfaceLight : `${sourceColor}15`) : (isDark ? colors.surfaceLight : colors.surfaceLight), borderColor: imported ? `${sourceColor}40` : colors.border }]}>
+              {collection.imageUri ? (
+                <Image source={{ uri: collection.imageUri }} style={styles.collectionImage} contentFit="cover" />
+              ) : (
+                <Icon size={28} color={imported ? sourceColor : colors.primary} strokeWidth={2} />
+              )}
             </View>
             {imported ? (
               <View style={styles.ownerRow}>
-                <UsersRound size={15} color={sourceColor} />
+                <UsersRound size={14} color={sourceColor} />
                 <Text style={[styles.owner, { color: sourceColor }]}>Partagée par {collection.ownerName || 'un ami'}</Text>
               </View>
             ) : null}
@@ -197,9 +201,17 @@ export default function CollectionDetailScreen({ route, navigation }: Props) {
                 onPress={() => setCollectionVisibility(collection.id, collection.isVisible === false)}
                 accessibilityRole="switch"
                 accessibilityState={{ checked: collection.isVisible !== false }}
-                style={({ pressed }) => [styles.visibilityRow, Shadows.hard, { backgroundColor: colors.surfaceLight, borderColor: colors.textPrimary, opacity: pressed ? 0.65 : 1 }]}
+                style={({ pressed }) => [
+                  styles.visibilityRow,
+                  Shadows.hairline,
+                  {
+                    backgroundColor: isDark ? colors.surfaceLight : colors.background,
+                    borderColor: colors.border,
+                    opacity: pressed ? 0.65 : 1,
+                  },
+                ]}
               >
-                {collection.isVisible === false ? <EyeOff size={21} color={colors.textMuted} /> : <Eye size={21} color={sourceColor} />}
+                {collection.isVisible === false ? <EyeOff size={20} color={colors.textMuted} /> : <Eye size={20} color={sourceColor} />}
                 <View style={styles.visibilityCopy}>
                   <Text style={[styles.visibilityTitle, { color: colors.textPrimary }]}>
                     {collection.isVisible === false ? 'Afficher dans Restos et Carte' : 'Visible dans Restos et Carte'}
@@ -210,10 +222,14 @@ export default function CollectionDetailScreen({ route, navigation }: Props) {
             ) : (
               <Pressable
                 onPress={() => navigation.navigate('AddRestaurant', { collectionId: collection.id })}
-                style={({ pressed }) => [styles.addAddress, { backgroundColor: colors.accent, opacity: pressed ? 0.72 : 1 }]}
+                style={({ pressed }) => [
+                  styles.addAddress,
+                  Shadows.card,
+                  { backgroundColor: colors.primary, opacity: pressed ? 0.78 : 1 },
+                ]}
               >
-                <Plus size={18} color={colors.textOnAccent} />
-                <Text style={[styles.addAddressText, { color: colors.textOnAccent }]}>Ajouter une adresse</Text>
+                <Plus size={16} color={colors.textOnPrimary} />
+                <Text style={[styles.addAddressText, { color: colors.textOnPrimary }]}>Ajouter une adresse</Text>
               </Pressable>
             )}
 
@@ -222,18 +238,25 @@ export default function CollectionDetailScreen({ route, navigation }: Props) {
                 <Pressable
                   onPress={() => setEditOpen(true)}
                   accessibilityRole="button"
-                  style={({ pressed }) => [styles.collectionAction, { borderColor: colors.textPrimary, opacity: pressed ? 0.58 : 1 }]}
+                  style={({ pressed }) => [
+                    styles.collectionAction,
+                    { borderColor: colors.border, backgroundColor: isDark ? colors.surfaceLight : colors.background, opacity: pressed ? 0.65 : 1 },
+                  ]}
                 >
-                  <Pencil size={18} color={colors.textSecondary} />
+                  <Pencil size={16} color={colors.textSecondary} />
                   <Text style={[styles.collectionActionText, { color: colors.textSecondary }]}>Modifier</Text>
                 </Pressable>
               ) : null}
               <Pressable
                 onPress={removeCollection}
                 accessibilityRole="button"
-                style={({ pressed }) => [styles.collectionAction, styles.collectionDeleteAction, { borderColor: colors.danger, opacity: pressed ? 0.58 : 1 }]}
+                style={({ pressed }) => [
+                  styles.collectionAction,
+                  styles.collectionDeleteAction,
+                  { borderColor: `${colors.danger}40`, backgroundColor: `${colors.danger}10`, opacity: pressed ? 0.65 : 1 },
+                ]}
               >
-                <Trash2 size={18} color={colors.danger} />
+                <Trash2 size={16} color={colors.danger} />
                 <Text style={[styles.collectionActionText, { color: colors.danger }]}>Supprimer</Text>
               </Pressable>
             </View>
@@ -263,7 +286,7 @@ export default function CollectionDetailScreen({ route, navigation }: Props) {
             style={[StyleSheet.absoluteFillObject, { backgroundColor: colors.overlay }]}
             onPress={() => { if (!sharing) setShareOpen(false); }}
           />
-          <View style={[styles.shareSheet, Shadows.sheet, { backgroundColor: colors.surface, borderColor: colors.textPrimary }]}>
+          <View style={[styles.shareSheet, Shadows.sheet, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <View style={styles.shareSheetBody}>
               <View style={styles.shareSheetHeader}>
                 <View style={styles.shareSheetCopy}>
@@ -277,7 +300,7 @@ export default function CollectionDetailScreen({ route, navigation }: Props) {
                   accessibilityLabel="Fermer"
                   style={({ pressed }) => [styles.closeButton, { opacity: pressed || sharing ? 0.45 : 1 }]}
                 >
-                  <X size={21} color={colors.textPrimary} />
+                  <X size={20} color={colors.textPrimary} />
                 </Pressable>
               </View>
 
@@ -296,7 +319,14 @@ export default function CollectionDetailScreen({ route, navigation }: Props) {
                 placeholderTextColor={colors.textMuted}
                 selectionColor={colors.accent}
                 accessibilityLabel="Prénom à afficher lors du partage"
-                style={[styles.shareInput, Shadows.hard, { color: colors.textPrimary, backgroundColor: colors.background, borderColor: shareNameTouched && !shareName.trim() ? colors.danger : colors.textPrimary }]}
+                style={[
+                  styles.shareInput,
+                  {
+                    color: colors.textPrimary,
+                    backgroundColor: isDark ? colors.surfaceLight : colors.background,
+                    borderColor: shareNameTouched && !shareName.trim() ? colors.danger : colors.border,
+                  },
+                ]}
               />
               {shareNameTouched && !shareName.trim() ? (
                 <Text style={[styles.shareError, { color: colors.danger }]}>Ajoutez un prénom pour partager la liste.</Text>
@@ -311,15 +341,14 @@ export default function CollectionDetailScreen({ route, navigation }: Props) {
                 accessibilityLabel="Générer le lien de partage"
                 style={({ pressed }) => [
                   styles.shareButton,
-                  Shadows.hard,
+                  Shadows.card,
                   {
-                    backgroundColor: colors.accentPink,
-                    borderColor: colors.textPrimary,
-                    opacity: sharing ? 0.45 : !shareName.trim() ? 0.58 : pressed ? 0.72 : 1,
+                    backgroundColor: colors.primary,
+                    opacity: sharing ? 0.45 : !shareName.trim() ? 0.58 : pressed ? 0.78 : 1,
                   },
                 ]}
               >
-                {sharing ? <ActivityIndicator color={colors.textOnAccent} /> : <Text style={[styles.shareButtonText, { color: colors.textOnAccent }]}>Générer le lien</Text>}
+                {sharing ? <ActivityIndicator color={colors.textOnPrimary} /> : <Text style={[styles.shareButtonText, { color: colors.textOnPrimary }]}>Générer le lien</Text>}
               </Pressable>
             </View>
           </View>
@@ -338,42 +367,42 @@ export default function CollectionDetailScreen({ route, navigation }: Props) {
 
 const styles = StyleSheet.create({
   screen: { flex: 1 },
-  topBar: { minHeight: 54, paddingHorizontal: Spacing.sm, flexDirection: 'row', alignItems: 'flex-end', paddingBottom: 6, borderBottomWidth: 0 },
+  topBar: { minHeight: 50, paddingHorizontal: Spacing.sm, flexDirection: 'row', alignItems: 'center' },
   topAction: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-  topTitle: { flex: 1, paddingBottom: 12, fontFamily: FontFamily.semiBold, fontSize: FontSize.md, textAlign: 'center' },
-  header: { alignItems: 'flex-start', marginTop: Spacing.xxl, marginBottom: Spacing.lg, padding: Spacing.xl, borderWidth: 1.5, borderRadius: 14 },
-  collectionIcon: { width: 64, height: 64, marginBottom: Spacing.lg, alignItems: 'center', justifyContent: 'center', overflow: 'hidden', borderWidth: 1.5, borderRadius: BorderRadius.lg },
+  topTitle: { flex: 1, fontFamily: FontFamily.bold, fontSize: FontSize.md, letterSpacing: -0.2, textAlign: 'center' },
+  header: { alignItems: 'flex-start', marginTop: Spacing.lg, marginBottom: Spacing.lg, padding: Spacing.xl, borderWidth: 1, borderRadius: BorderRadius.xl },
+  collectionIcon: { width: 56, height: 56, marginBottom: Spacing.md, alignItems: 'center', justifyContent: 'center', overflow: 'hidden', borderWidth: 1, borderRadius: BorderRadius.lg },
   collectionImage: { width: '100%', height: '100%' },
-  ownerRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: Spacing.sm },
-  owner: { fontFamily: FontFamily.semiBold, fontSize: FontSize.sm },
-  title: { fontFamily: FontFamily.semiBold, fontSize: FontSize.xxl, letterSpacing: -0.7 },
-  description: { marginTop: Spacing.sm, maxWidth: 520, fontFamily: FontFamily.regular, fontSize: FontSize.md, lineHeight: 23 },
-  count: { marginTop: Spacing.sm, fontFamily: FontFamily.medium, fontSize: FontSize.sm },
-  visibilityRow: { alignSelf: 'stretch', minHeight: 68, marginTop: Spacing.xl, paddingHorizontal: Spacing.md, flexDirection: 'row', alignItems: 'center', gap: Spacing.md, borderWidth: 1.5, borderRadius: 10 },
+  ownerRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: Spacing.xs },
+  owner: { fontFamily: FontFamily.semiBold, fontSize: FontSize.xs },
+  title: { fontFamily: FontFamily.bold, fontSize: FontSize.xxl, letterSpacing: -0.768 },
+  description: { marginTop: Spacing.xs, maxWidth: 520, fontFamily: FontFamily.regular, fontSize: FontSize.md, lineHeight: 22 },
+  count: { marginTop: Spacing.xs, fontFamily: FontFamily.medium, fontSize: FontSize.xs },
+  visibilityRow: { alignSelf: 'stretch', minHeight: 60, marginTop: Spacing.lg, paddingHorizontal: Spacing.md, flexDirection: 'row', alignItems: 'center', gap: Spacing.md, borderWidth: 1, borderRadius: BorderRadius.lg },
   visibilityCopy: { flex: 1 },
   visibilityTitle: { fontFamily: FontFamily.semiBold, fontSize: FontSize.sm },
-  visibilityDetail: { marginTop: 3, fontFamily: FontFamily.regular, fontSize: FontSize.xs },
-  addAddress: { minHeight: 46, marginTop: Spacing.xl, paddingHorizontal: Spacing.lg, flexDirection: 'row', alignItems: 'center', gap: 7, borderRadius: BorderRadius.md },
-  addAddressText: { fontFamily: FontFamily.semiBold, fontSize: FontSize.sm },
-  collectionActions: { alignSelf: 'stretch', marginTop: Spacing.xl, flexDirection: 'row', gap: Spacing.sm },
-  collectionAction: { flex: 1, minHeight: 46, paddingHorizontal: Spacing.sm, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderWidth: 1.5, borderRadius: BorderRadius.md },
-  collectionDeleteAction: { borderWidth: 1.5 },
-  collectionActionText: { fontFamily: FontFamily.semiBold, fontSize: FontSize.sm },
-  sectionTitle: { marginTop: Spacing.xxxl, marginBottom: Spacing.md, fontFamily: FontFamily.semiBold, fontSize: FontSize.lg },
-  firstRestaurant: { marginTop: Spacing.md },
+  visibilityDetail: { marginTop: 2, fontFamily: FontFamily.regular, fontSize: FontSize.xs },
+  addAddress: { minHeight: 46, alignSelf: 'stretch', marginTop: Spacing.lg, paddingHorizontal: Spacing.lg, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, borderRadius: BorderRadius.button },
+  addAddressText: { fontFamily: FontFamily.bold, fontSize: FontSize.sm, letterSpacing: 0.1 },
+  collectionActions: { alignSelf: 'stretch', marginTop: Spacing.lg, flexDirection: 'row', gap: Spacing.sm },
+  collectionAction: { flex: 1, minHeight: 44, paddingHorizontal: Spacing.sm, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderWidth: 1, borderRadius: BorderRadius.button },
+  collectionDeleteAction: { borderWidth: 1 },
+  collectionActionText: { fontFamily: FontFamily.semiBold, fontSize: FontSize.xs },
+  sectionTitle: { marginTop: Spacing.xxl, marginBottom: Spacing.xs, fontFamily: FontFamily.bold, fontSize: FontSize.md, letterSpacing: -0.2 },
+  firstRestaurant: { marginTop: Spacing.sm },
   shareModalRoot: { flex: 1, justifyContent: 'flex-end' },
   bottomSafeAreaFill: { position: 'absolute', right: 0, bottom: 0, left: 0, zIndex: 20 },
-  shareSheet: { overflow: 'hidden', borderTopLeftRadius: 16, borderTopRightRadius: 16, borderWidth: 1.5 },
+  shareSheet: { overflow: 'hidden', borderTopLeftRadius: BorderRadius.xxl, borderTopRightRadius: BorderRadius.xxl, borderWidth: 1 },
   shareSheetBody: { paddingHorizontal: Spacing.xl, paddingTop: Spacing.xl },
-  shareSheetHeader: { minHeight: 54, flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.md },
+  shareSheetHeader: { minHeight: 48, flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.md },
   shareSheetCopy: { flex: 1 },
-  shareSheetTitle: { fontFamily: FontFamily.semiBold, fontSize: FontSize.xl },
-  shareSheetSubtitle: { marginTop: 5, fontFamily: FontFamily.regular, fontSize: FontSize.sm, lineHeight: 20 },
+  shareSheetTitle: { fontFamily: FontFamily.bold, fontSize: FontSize.xl, letterSpacing: -0.3 },
+  shareSheetSubtitle: { marginTop: 3, fontFamily: FontFamily.regular, fontSize: FontSize.xs, lineHeight: 18 },
   closeButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-  shareLabel: { marginTop: Spacing.xl, marginBottom: Spacing.sm, fontFamily: FontFamily.medium, fontSize: FontSize.sm },
-  shareInput: { minHeight: 52, paddingHorizontal: Spacing.md, borderWidth: 1.5, borderRadius: 8, fontFamily: FontFamily.regular, fontSize: FontSize.md },
+  shareLabel: { marginTop: Spacing.lg, marginBottom: Spacing.xs, fontFamily: FontFamily.semiBold, fontSize: FontSize.sm },
+  shareInput: { minHeight: 48, paddingHorizontal: Spacing.md, borderWidth: 1, borderRadius: BorderRadius.md, fontFamily: FontFamily.regular, fontSize: FontSize.md },
   shareError: { marginTop: 6, fontFamily: FontFamily.medium, fontSize: FontSize.xs },
-  shareFooter: { paddingHorizontal: Spacing.xl, paddingTop: Spacing.xxl },
-  shareButton: { minHeight: 52, alignItems: 'center', justifyContent: 'center', borderRadius: 8, borderWidth: 1.5 },
-  shareButtonText: { fontFamily: FontFamily.semiBold, fontSize: FontSize.md },
+  shareFooter: { paddingHorizontal: Spacing.xl, paddingTop: Spacing.xl },
+  shareButton: { minHeight: 48, alignItems: 'center', justifyContent: 'center', borderRadius: BorderRadius.button },
+  shareButtonText: { fontFamily: FontFamily.bold, fontSize: FontSize.md, letterSpacing: 0.1 },
 });

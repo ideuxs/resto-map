@@ -209,19 +209,31 @@ export default function CollectionsListScreen({ navigation }: Props) {
         accessibilityLabel={imported ? `${item.name}, partagée par ${ownerName}, ${addressCount}` : `${item.name}, ${addressCount}`}
         style={({ pressed }) => [
           styles.collectionCard,
-          imported ? Shadows.surface : Shadows.hard,
+          Shadows.card,
           {
             width: collectionCardWidth,
             backgroundColor: colors.surface,
-            borderColor: imported ? sourceColor : colors.textPrimary,
+            borderColor: imported ? `${sourceColor}40` : colors.border,
             opacity: pressed ? 0.72 : 1,
           },
         ]}
       >
-        <CollectionCardPattern icon={Icon} color={imported ? sourceColor : colors.accent} />
+        <CollectionCardPattern icon={Icon} color={imported ? sourceColor : colors.primary} />
         <View style={styles.cardTopRow}>
-          <View style={[styles.iconBox, { backgroundColor: imported ? `${sourceColor}18` : colors.surfaceMuted, borderColor: imported ? sourceColor : colors.textPrimary }]}>
-            {item.imageUri ? <Image source={{ uri: item.imageUri }} style={styles.collectionImage} contentFit="cover" /> : <Icon size={28} color={imported ? sourceColor : colors.textPrimary} strokeWidth={2} />}
+          <View
+            style={[
+              styles.iconBox,
+              {
+                backgroundColor: imported ? (isDark ? colors.surfaceLight : `${sourceColor}15`) : (isDark ? colors.surfaceLight : colors.surfaceLight),
+                borderColor: imported ? `${sourceColor}40` : colors.border,
+              },
+            ]}
+          >
+            {item.imageUri ? (
+              <Image source={{ uri: item.imageUri }} style={styles.collectionImage} contentFit="cover" />
+            ) : (
+              <Icon size={26} color={imported ? sourceColor : colors.primary} strokeWidth={2} />
+            )}
           </View>
           {imported ? (
             <Pressable
@@ -235,15 +247,15 @@ export default function CollectionsListScreen({ navigation }: Props) {
               style={({ pressed }) => [styles.eyeButton, { opacity: pressed ? 0.5 : 1 }]}
             >
               {item.isVisible === false
-                ? <EyeOff size={21} color={colors.textMuted} />
-                : <Eye size={21} color={sourceColor} />}
+                ? <EyeOff size={20} color={colors.textMuted} />
+                : <Eye size={20} color={sourceColor} />}
             </Pressable>
-          ) : <ChevronRight size={21} color={colors.textMuted} />}
+          ) : <ChevronRight size={18} color={colors.textMuted} />}
         </View>
         <Text style={[styles.cardTitle, { color: colors.textPrimary }]} numberOfLines={2}>{item.name}</Text>
         {imported ? (
           <View style={styles.ownerLine}>
-            <UsersRound size={14} color={sourceColor} />
+            <UsersRound size={13} color={sourceColor} />
             <Text style={[styles.owner, { color: sourceColor }]} numberOfLines={1}>Partagée par {ownerName}</Text>
           </View>
         ) : (
@@ -289,69 +301,91 @@ export default function CollectionsListScreen({ navigation }: Props) {
   return (
     <KeyboardAvoidingView style={[styles.screen, { backgroundColor: colors.background }]} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView
-        contentContainerStyle={[styles.content, { paddingTop: insets.top + Spacing.lg, paddingBottom: insets.bottom + 96 }]}
+        contentContainerStyle={[styles.content, { paddingTop: insets.top + Spacing.md, paddingBottom: insets.bottom + 96 }]}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
         automaticallyAdjustKeyboardInsets
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.header}>
-            <ScreenHeader
-              title="Listes"
-              subtitle="Organisez vos repères et retrouvez les listes de vos proches."
-              onAdd={() => setFormOpen(true)}
-              addAccessibilityLabel="Créer une liste"
+          <ScreenHeader
+            title="Listes"
+            subtitle="Organisez vos repères et retrouvez les listes de vos proches."
+            onAdd={() => setFormOpen(true)}
+            addAccessibilityLabel="Créer une liste"
+          />
+
+          <View style={[styles.importLine, Shadows.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <View style={[styles.importIcon, { backgroundColor: isDark ? colors.surfaceLight : colors.surfaceLight }]}>
+              <Download size={18} color={colors.primary} />
+            </View>
+            <View style={styles.importCopy}>
+              <Text style={[styles.importTitle, { color: colors.textPrimary }]}>Importer une liste</Text>
+              <Text style={[styles.importSubtitle, { color: colors.textMuted }]}>Depuis un lien RestoHub copié.</Text>
+            </View>
+            <Pressable
+              onPress={importFromClipboard}
+              disabled={importing}
+              style={({ pressed }) => [
+                styles.importButton,
+                Shadows.hairline,
+                {
+                  backgroundColor: colors.primary,
+                  opacity: pressed ? 0.78 : 1,
+                },
+              ]}
+            >
+              {importing ? (
+                <ActivityIndicator size="small" color={colors.textOnPrimary} />
+              ) : (
+                <Text style={[styles.importButtonText, { color: colors.textOnPrimary }]}>Importer</Text>
+              )}
+            </Pressable>
+          </View>
+
+          <View style={[styles.search, Shadows.hairline, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <Search size={18} color={colors.textMuted} />
+            <TextInput
+              value={query}
+              onChangeText={setQuery}
+              onSubmitEditing={Keyboard.dismiss}
+              returnKeyType="search"
+              blurOnSubmit
+              placeholder="Rechercher une liste ou un ami"
+              placeholderTextColor={colors.textMuted}
+              selectionColor={colors.accent}
+              accessibilityLabel="Rechercher une liste"
+              style={[styles.searchInput, { color: colors.textPrimary }]}
             />
+            {query ? <Pressable onPress={() => setQuery('')} hitSlop={10}><X size={18} color={colors.textMuted} /></Pressable> : null}
+          </View>
 
-            <View style={[styles.importLine, Shadows.hard, { backgroundColor: colors.surface, borderColor: colors.textPrimary }]}>
-              <View style={[styles.importIcon, { backgroundColor: `${colors.accentPink}16` }]}>
-                <Download size={18} color={colors.accentPink} />
+          <Text style={[styles.toolsLabel, { color: colors.textPrimary }]}>Outils</Text>
+          <View style={[styles.toolsSection, Shadows.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <Pressable onPress={() => navigation.navigate('DuplicateReview')} style={({ pressed }) => [styles.utilityRow, { opacity: pressed ? 0.6 : 1 }]}>
+              <View style={[styles.toolIconBox, { backgroundColor: isDark ? colors.surfaceLight : colors.surfaceLight }]}>
+                <GitMerge size={18} color={duplicateCount ? colors.primary : colors.textMuted} />
               </View>
-              <View style={styles.importCopy}>
-                <Text style={[styles.importTitle, { color: colors.textPrimary }]}>Importer une liste</Text>
-                <Text style={[styles.importSubtitle, { color: colors.textMuted }]}>Depuis un lien RestoHub copié.</Text>
+              <View style={styles.utilityCopy}>
+                <Text style={[styles.utilityTitle, { color: colors.textPrimary }]}>Doublons à vérifier</Text>
+                <Text style={[styles.utilityDetail, { color: colors.textMuted }]}>
+                  {duplicateCount ? `${duplicateCount} rapprochement${duplicateCount > 1 ? 's' : ''} en attente` : 'Aucun rapprochement en attente'}
+                </Text>
               </View>
-              <Pressable onPress={importFromClipboard} disabled={importing} style={({ pressed }) => [styles.importButton, { opacity: pressed ? 0.55 : 1 }]}>
-                {importing ? <ActivityIndicator size="small" color={colors.accentPink} /> : <Text style={[styles.importButtonText, { color: colors.accentPink }]}>Importer</Text>}
-              </Pressable>
-            </View>
-
-            <View style={[styles.search, { backgroundColor: colors.surface, borderColor: colors.textPrimary }]}>
-              <Search size={19} color={colors.textMuted} />
-              <TextInput
-                value={query}
-                onChangeText={setQuery}
-                onSubmitEditing={Keyboard.dismiss}
-                returnKeyType="search"
-                blurOnSubmit
-                placeholder="Rechercher une liste ou un ami"
-                placeholderTextColor={colors.textMuted}
-                selectionColor={colors.accent}
-                accessibilityLabel="Rechercher une liste"
-                style={[styles.searchInput, { color: colors.textPrimary }]}
-              />
-              {query ? <Pressable onPress={() => setQuery('')} hitSlop={10}><X size={18} color={colors.textMuted} /></Pressable> : null}
-            </View>
-
-            <Text style={[styles.toolsLabel, { color: colors.textPrimary }]}>Outils</Text>
-            <View style={[styles.toolsSection, Shadows.hard, { backgroundColor: colors.surface, borderColor: colors.textPrimary }]}>
-              <Pressable onPress={() => navigation.navigate('DuplicateReview')} style={({ pressed }) => [styles.utilityRow, { opacity: pressed ? 0.6 : 1 }]}>
-                <View style={[styles.toolIconBox, { backgroundColor: `${duplicateCount ? colors.accentPink : colors.textMuted}14` }]}><GitMerge size={19} color={duplicateCount ? colors.accentPink : colors.textMuted} /></View>
-                <View style={styles.utilityCopy}>
-                  <Text style={[styles.utilityTitle, { color: colors.textPrimary }]}>Doublons à vérifier</Text>
-                  <Text style={[styles.utilityDetail, { color: colors.textMuted }]}>{duplicateCount ? `${duplicateCount} rapprochement${duplicateCount > 1 ? 's' : ''} en attente` : 'Aucun rapprochement en attente'}</Text>
-                </View>
-                <ChevronRight size={19} color={colors.textMuted} />
-              </Pressable>
-              <Pressable onPress={() => setAppearanceOpen(true)} style={({ pressed }) => [styles.utilityRow, { opacity: pressed ? 0.6 : 1 }]} accessibilityRole="button">
-                <View style={[styles.toolIconBox, { backgroundColor: `${colors.accent}14` }]}><AppearanceIcon size={19} color={colors.accent} /></View>
-                <View style={styles.utilityCopy}>
-                  <Text style={[styles.utilityTitle, { color: colors.textPrimary }]}>Apparence</Text>
-                  <Text style={[styles.utilityDetail, { color: colors.textMuted }]}>{currentAppearance.label} · modifier</Text>
-                </View>
-                <ChevronRight size={19} color={colors.textMuted} />
-              </Pressable>
-            </View>
+              <ChevronRight size={18} color={colors.textMuted} />
+            </Pressable>
+            <View style={[styles.toolDivider, { backgroundColor: colors.border }]} />
+            <Pressable onPress={() => setAppearanceOpen(true)} style={({ pressed }) => [styles.utilityRow, { opacity: pressed ? 0.6 : 1 }]} accessibilityRole="button">
+              <View style={[styles.toolIconBox, { backgroundColor: isDark ? colors.surfaceLight : colors.surfaceLight }]}>
+                <AppearanceIcon size={18} color={colors.primary} />
+              </View>
+              <View style={styles.utilityCopy}>
+                <Text style={[styles.utilityTitle, { color: colors.textPrimary }]}>Apparence</Text>
+                <Text style={[styles.utilityDetail, { color: colors.textMuted }]}>{currentAppearance.label} · modifier</Text>
+              </View>
+              <ChevronRight size={18} color={colors.textMuted} />
+            </Pressable>
+          </View>
         </View>
 
         {renderCarousel('Mes listes', personalCollections)}
@@ -367,19 +401,20 @@ export default function CollectionsListScreen({ navigation }: Props) {
           />
         ) : null}
       </ScrollView>
+
       <CollectionFormModal visible={formOpen} onClose={() => setFormOpen(false)} onSave={createCollection} />
+
       <Modal visible={appearanceOpen} transparent={false} presentationStyle="fullScreen" animationType="slide" statusBarTranslucent onRequestClose={() => setAppearanceOpen(false)}>
         <View style={[styles.appearanceModalRoot, { backgroundColor: colors.surface }]}>
           <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setAppearanceOpen(false)} />
-          <View style={[styles.appearanceSheet, Shadows.sheet, { backgroundColor: colors.surface, borderColor: colors.textPrimary, paddingBottom: insets.bottom + Spacing.md }]}>
-            <View style={[styles.sheetHandle, { backgroundColor: colors.border }]} />
+          <View style={[styles.appearanceSheet, { backgroundColor: colors.surface, paddingBottom: insets.bottom + Spacing.md, paddingTop: insets.top + Spacing.md }]}>
             <View style={styles.appearanceSheetHeader}>
               <View>
                 <Text style={[styles.sheetTitle, { color: colors.textPrimary }]}>Apparence</Text>
                 <Text style={[styles.sheetSubtitle, { color: colors.textMuted }]}>Choisissez le contraste qui vous convient.</Text>
               </View>
               <Pressable onPress={() => setAppearanceOpen(false)} style={styles.closeButton} accessibilityLabel="Fermer">
-                <X size={21} color={colors.textPrimary} />
+                <X size={20} color={colors.textPrimary} />
               </Pressable>
             </View>
             <View accessibilityRole="radiogroup">
@@ -394,17 +429,19 @@ export default function CollectionsListScreen({ navigation }: Props) {
                     accessibilityState={{ checked: selected }}
                     style={({ pressed }) => [
                       styles.appearanceOption,
-                      Shadows.hard,
+                      Shadows.hairline,
                       {
-                        backgroundColor: selected ? colors.surfaceLight : colors.surface,
-                        borderColor: colors.textPrimary,
-                        opacity: pressed ? 0.62 : 1,
+                        backgroundColor: selected ? (isDark ? colors.surfaceAubergine : `${colors.primary}12`) : (isDark ? colors.surfaceLight : colors.background),
+                        borderColor: selected ? colors.primary : colors.border,
+                        opacity: pressed ? 0.65 : 1,
                       },
                     ]}
                   >
-                    <Icon size={19} color={selected ? colors.accent : colors.textMuted} />
-                    <Text style={[styles.appearanceOptionText, { color: selected ? colors.accent : colors.textSecondary }]}>{option.label}</Text>
-                    {selected ? <Check size={20} color={colors.accent} strokeWidth={2.4} /> : null}
+                    <Icon size={19} color={selected ? colors.primary : colors.textMuted} />
+                    <Text style={[styles.appearanceOptionText, { color: selected ? colors.primary : colors.textSecondary, fontFamily: selected ? FontFamily.bold : FontFamily.medium }]}>
+                      {option.label}
+                    </Text>
+                    {selected ? <Check size={18} color={colors.primary} strokeWidth={2.4} /> : null}
                   </Pressable>
                 );
               })}
@@ -426,51 +463,85 @@ export default function CollectionsListScreen({ navigation }: Props) {
 const styles = StyleSheet.create({
   screen: { flex: 1 },
   content: { paddingHorizontal: Spacing.lg },
-  header: { paddingBottom: Spacing.xl },
-  importLine: { minHeight: 76, marginTop: Spacing.xl, padding: Spacing.md, flexDirection: 'row', alignItems: 'center', gap: Spacing.md, borderWidth: 1.5, borderRadius: 12 },
+  header: { paddingBottom: Spacing.lg },
+  importLine: {
+    minHeight: 70,
+    marginTop: Spacing.lg,
+    padding: Spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.md,
+    borderWidth: 1,
+    borderRadius: BorderRadius.xl,
+  },
   importIcon: { width: 38, height: 38, alignItems: 'center', justifyContent: 'center', borderRadius: BorderRadius.md },
   importCopy: { flex: 1 },
   importTitle: { fontFamily: FontFamily.semiBold, fontSize: FontSize.md },
   importSubtitle: { marginTop: 2, fontFamily: FontFamily.regular, fontSize: FontSize.xs },
-  importButton: { minHeight: 44, paddingHorizontal: Spacing.sm, flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
-  importButtonText: { fontFamily: FontFamily.semiBold, fontSize: FontSize.sm },
-  search: { minHeight: 52, marginTop: Spacing.xl, paddingHorizontal: Spacing.md, flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, borderWidth: 1.5, borderRadius: 10 },
-  searchInput: { flex: 1, minHeight: 46, fontFamily: FontFamily.regular, fontSize: FontSize.md },
-  toolsLabel: { marginTop: Spacing.xxxl, marginBottom: Spacing.sm, fontFamily: FontFamily.semiBold, fontSize: FontSize.lg },
-  toolsSection: { padding: Spacing.sm, borderWidth: 1.5, borderRadius: 12 },
-  utilityRow: { minHeight: 62, paddingHorizontal: Spacing.xs, flexDirection: 'row', alignItems: 'center', gap: Spacing.md, borderRadius: BorderRadius.lg },
-  toolIconBox: { width: 38, height: 38, alignItems: 'center', justifyContent: 'center', borderRadius: 12 },
+  importButton: {
+    minHeight: 38,
+    paddingHorizontal: Spacing.lg,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: BorderRadius.button,
+  },
+  importButtonText: { fontFamily: FontFamily.bold, fontSize: FontSize.xs + 1, letterSpacing: 0.1 },
+  search: {
+    minHeight: 48,
+    marginTop: Spacing.md,
+    paddingHorizontal: Spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    borderWidth: 1,
+    borderRadius: BorderRadius.md,
+  },
+  searchInput: { flex: 1, minHeight: 44, fontFamily: FontFamily.regular, fontSize: FontSize.md },
+  toolsLabel: { marginTop: Spacing.xxl, marginBottom: Spacing.xs, fontFamily: FontFamily.bold, fontSize: FontSize.md, letterSpacing: -0.2 },
+  toolsSection: { borderWidth: 1, borderRadius: BorderRadius.xl, overflow: 'hidden' },
+  utilityRow: { minHeight: 56, paddingHorizontal: Spacing.md, flexDirection: 'row', alignItems: 'center', gap: Spacing.md },
+  toolIconBox: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center', borderRadius: BorderRadius.md },
   utilityCopy: { flex: 1 },
-  utilityDetail: { fontFamily: FontFamily.regular, fontSize: FontSize.xs },
+  utilityDetail: { marginTop: 1, fontFamily: FontFamily.regular, fontSize: FontSize.xs },
   utilityTitle: { fontFamily: FontFamily.semiBold, fontSize: FontSize.sm },
-  appearanceOption: { minHeight: 54, marginBottom: Spacing.sm, paddingHorizontal: Spacing.md, flexDirection: 'row', alignItems: 'center', gap: Spacing.md, borderWidth: 1.5, borderRadius: 8 },
-  appearanceOptionText: { flex: 1, fontFamily: FontFamily.medium, fontSize: FontSize.sm },
-  collectionSection: { marginTop: Spacing.xxl },
-  importedSection: { marginTop: Spacing.xxxl },
+  toolDivider: { height: 1, marginLeft: 56 },
+  appearanceOption: {
+    minHeight: 52,
+    marginBottom: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.md,
+    borderWidth: 1,
+    borderRadius: BorderRadius.md,
+  },
+  appearanceOptionText: { flex: 1, fontSize: FontSize.sm },
+  collectionSection: { marginTop: Spacing.xl },
+  importedSection: { marginTop: Spacing.xxl },
   sectionHeaderRow: { minHeight: 28, flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: Spacing.md },
-  sectionTitle: { fontFamily: FontFamily.semiBold, fontSize: FontSize.lg },
+  sectionTitle: { fontFamily: FontFamily.bold, fontSize: FontSize.lg, letterSpacing: -0.3 },
   sectionCount: { fontFamily: FontFamily.medium, fontSize: FontSize.xs },
   sectionSubtitle: { marginTop: 2, fontFamily: FontFamily.regular, fontSize: FontSize.xs },
-  carouselContent: { paddingTop: Spacing.md, paddingBottom: Spacing.lg },
+  carouselContent: { paddingTop: Spacing.sm, paddingBottom: Spacing.md },
   carouselGap: { width: Spacing.md },
-  collectionCard: { minHeight: 176, padding: Spacing.md, borderWidth: 1.5, borderRadius: 14 },
-  cardTopRow: { minHeight: 56, flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' },
-  iconBox: { width: 56, height: 56, alignItems: 'center', justifyContent: 'center', overflow: 'hidden', borderWidth: 1.5, borderRadius: 14 },
+  collectionCard: { minHeight: 168, padding: Spacing.md, borderWidth: 1, borderRadius: BorderRadius.xl },
+  cardTopRow: { minHeight: 52, flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' },
+  iconBox: { width: 52, height: 52, alignItems: 'center', justifyContent: 'center', overflow: 'hidden', borderWidth: 1, borderRadius: BorderRadius.lg },
   collectionImage: { width: '100%', height: '100%' },
-  cardTitle: { marginTop: Spacing.md, fontFamily: FontFamily.semiBold, fontSize: FontSize.lg, lineHeight: 24 },
-  personalLabel: { marginTop: 4, fontFamily: FontFamily.medium, fontSize: FontSize.xs },
-  ownerLine: { marginTop: 5, flexDirection: 'row', alignItems: 'center', gap: 5 },
+  cardTitle: { marginTop: Spacing.md, fontFamily: FontFamily.bold, fontSize: FontSize.md, lineHeight: 22, letterSpacing: -0.2 },
+  personalLabel: { marginTop: 3, fontFamily: FontFamily.medium, fontSize: FontSize.xs },
+  ownerLine: { marginTop: 4, flexDirection: 'row', alignItems: 'center', gap: 4 },
   owner: { flex: 1, fontFamily: FontFamily.medium, fontSize: FontSize.xs },
   cardMetaRow: { marginTop: Spacing.md, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: Spacing.sm },
   rowMeta: { fontFamily: FontFamily.regular, fontSize: FontSize.xs },
   cardDate: { flexShrink: 1, fontFamily: FontFamily.regular, fontSize: FontSize.xs, textAlign: 'right' },
-  eyeButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  eyeButton: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
   appearanceModalRoot: { flex: 1, justifyContent: 'flex-end' },
   bottomSafeAreaFill: { position: 'absolute', right: 0, bottom: 0, left: 0, zIndex: 20 },
-  appearanceSheet: { paddingHorizontal: Spacing.xl, paddingTop: Spacing.sm, borderTopLeftRadius: 16, borderTopRightRadius: 16, borderWidth: 1.5 },
-  sheetHandle: { width: 36, height: 4, alignSelf: 'center', marginBottom: Spacing.md, borderRadius: BorderRadius.full },
-  appearanceSheetHeader: { minHeight: 54, marginBottom: Spacing.md, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: Spacing.md },
-  sheetTitle: { fontFamily: FontFamily.semiBold, fontSize: FontSize.xl },
-  sheetSubtitle: { marginTop: 3, fontFamily: FontFamily.regular, fontSize: FontSize.xs },
+  appearanceSheet: { paddingHorizontal: Spacing.xl, flex: 1 },
+  appearanceSheetHeader: { minHeight: 52, marginBottom: Spacing.lg, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: Spacing.md },
+  sheetTitle: { fontFamily: FontFamily.bold, fontSize: FontSize.xl, letterSpacing: -0.3 },
+  sheetSubtitle: { marginTop: 2, fontFamily: FontFamily.regular, fontSize: FontSize.xs },
   closeButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
 });
