@@ -18,6 +18,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { v4 as uuidv4 } from 'uuid';
 import * as ImagePicker from 'expo-image-picker';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import * as Haptics from 'expo-haptics';
 
 import type { Visit } from '../types';
 import { saveVisit } from '../storage/storage';
@@ -234,6 +235,7 @@ export default function VisitFormModal({ visible, placeId, visit, onClose }: Pro
       };
 
       await saveVisit(nextVisit);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => undefined);
       onClose();
     } catch {
       Alert.alert('Erreur', 'Impossible d’enregistrer cette visite. Réessayez.');
@@ -345,10 +347,17 @@ export default function VisitFormModal({ visible, placeId, visit, onClose }: Pro
                   return (
                     <Pressable
                       key={star}
-                      onPress={() => { setRating(star === rating ? 0 : star); setDirty(true); }}
+                      onPress={() => {
+                        Haptics.selectionAsync().catch(() => undefined);
+                        setRating(star === rating ? 0 : star);
+                        setDirty(true);
+                      }}
                       accessibilityLabel={`${star} étoile${star > 1 ? 's' : ''}`}
                       hitSlop={6}
-                      style={styles.starButton}
+                      style={({ pressed }) => [
+                        styles.starButton,
+                        { transform: [{ scale: pressed ? 1.22 : 1 }] },
+                      ]}
                     >
                       <Star
                         size={32}
@@ -372,7 +381,11 @@ export default function VisitFormModal({ visible, placeId, visit, onClose }: Pro
                   return (
                     <Pressable
                       key={option.label}
-                      onPress={() => { setWouldReturn(option.value as ReturnChoice); setDirty(true); }}
+                      onPress={() => {
+                        Haptics.selectionAsync().catch(() => undefined);
+                        setWouldReturn(option.value as ReturnChoice);
+                        setDirty(true);
+                      }}
                       accessibilityRole="radio"
                       accessibilityState={{ selected }}
                       style={({ pressed }) => [
@@ -380,7 +393,8 @@ export default function VisitFormModal({ visible, placeId, visit, onClose }: Pro
                         {
                           backgroundColor: selected ? (isDark ? colors.surfaceAubergine : `${colors.primary}18`) : colors.surface,
                           borderColor: selected ? colors.primary : colors.border,
-                          opacity: pressed ? 0.68 : 1,
+                          transform: [{ scale: pressed ? 0.95 : 1 }],
+                          opacity: pressed ? 0.75 : 1,
                         },
                       ]}
                     >
@@ -396,13 +410,17 @@ export default function VisitFormModal({ visible, placeId, visit, onClose }: Pro
             {/* Optional details dropdown card */}
             <View style={[styles.detailsCard, { backgroundColor: isDark ? colors.surfaceLight : colors.background, borderColor: colors.border }]}>
               <Pressable
-                onPress={() => setDetailsOpen(!detailsOpen)}
+                onPress={() => {
+                  Haptics.selectionAsync().catch(() => undefined);
+                  setDetailsOpen(!detailsOpen);
+                }}
                 accessibilityRole="button"
                 accessibilityLabel={detailsOpen ? 'Masquer les détails facultatifs' : 'Afficher les détails facultatifs'}
                 style={({ pressed }) => [
                   styles.detailsToggle,
                   {
-                    opacity: pressed ? 0.72 : 1,
+                    transform: [{ scale: pressed ? 0.985 : 1 }],
+                    opacity: pressed ? 0.8 : 1,
                   },
                 ]}
               >
@@ -530,7 +548,8 @@ export default function VisitFormModal({ visible, placeId, visit, onClose }: Pro
                   Shadows.card,
                   {
                     backgroundColor: colors.primary,
-                    opacity: saving ? 0.42 : pressed ? 0.78 : 1,
+                    transform: [{ scale: pressed ? 0.97 : 1 }],
+                    opacity: saving ? 0.42 : pressed ? 0.85 : 1,
                   },
                 ]}
               >

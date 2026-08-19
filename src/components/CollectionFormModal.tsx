@@ -15,6 +15,7 @@ import {
 import { Image } from 'expo-image';
 import { X } from './FlaticonIcon';
 import * as ImagePicker from 'expo-image-picker';
+import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Collection } from '../types';
 import { COLLECTION_ICONS } from '../constants/collectionIcons';
@@ -109,6 +110,8 @@ export default function CollectionFormModal({ visible, collection, onClose, onSa
     setSaving(true);
     try {
       await onSave({ name: name.trim(), emoji: iconName, description: description.trim(), imageUri });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => undefined);
+      onClose();
     } finally {
       setSaving(false);
     }
@@ -225,7 +228,11 @@ export default function CollectionFormModal({ visible, collection, onClose, onSa
                 return (
                   <Pressable
                     key={value}
-                    onPress={() => { Keyboard.dismiss(); setIconName(value); }}
+                    onPress={() => {
+                      Haptics.selectionAsync().catch(() => undefined);
+                      Keyboard.dismiss();
+                      setIconName(value);
+                    }}
                     accessibilityRole="radio"
                     accessibilityState={{ selected }}
                     accessibilityLabel={label}
@@ -234,7 +241,8 @@ export default function CollectionFormModal({ visible, collection, onClose, onSa
                       {
                         backgroundColor: selected ? (isDark ? colors.surfaceAubergine : `${colors.primary}18`) : (isDark ? colors.surfaceLight : colors.background),
                         borderColor: selected ? colors.primary : colors.border,
-                        opacity: pressed ? 0.6 : 1,
+                        transform: [{ scale: pressed ? 0.92 : 1 }],
+                        opacity: pressed ? 0.75 : 1,
                       },
                     ]}
                   >
@@ -287,14 +295,16 @@ export default function CollectionFormModal({ visible, collection, onClose, onSa
             <View style={[styles.footer, { backgroundColor: colors.surface, paddingBottom: insets.bottom + Spacing.md }]}>
               <Pressable
                 onPress={submit}
-                disabled={!name.trim() || saving}
+                disabled={saving || !name.trim()}
                 accessibilityRole="button"
+                accessibilityState={{ disabled: saving || !name.trim(), busy: saving }}
                 style={({ pressed }) => [
                   styles.save,
                   Shadows.card,
                   {
                     backgroundColor: colors.primary,
-                    opacity: !name.trim() || saving ? 0.42 : pressed ? 0.78 : 1,
+                    transform: [{ scale: pressed ? 0.97 : 1 }],
+                    opacity: saving || !name.trim() ? 0.42 : pressed ? 0.85 : 1,
                   },
                 ]}
               >

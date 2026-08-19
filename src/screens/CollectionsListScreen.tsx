@@ -18,6 +18,7 @@ import {
 import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import * as Haptics from 'expo-haptics';
 import {
   BookMarked,
   Check,
@@ -204,7 +205,10 @@ export default function CollectionsListScreen({ navigation }: Props) {
     );
     return (
       <Pressable
-        onPress={() => navigation.navigate('CollectionDetail', { collectionId: item.id })}
+        onPress={() => {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
+          navigation.navigate('CollectionDetail', { collectionId: item.id });
+        }}
         accessibilityRole="button"
         accessibilityLabel={imported ? `${item.name}, partagée par ${ownerName}, ${addressCount}` : `${item.name}, ${addressCount}`}
         style={({ pressed }) => [
@@ -214,7 +218,8 @@ export default function CollectionsListScreen({ navigation }: Props) {
             width: collectionCardWidth,
             backgroundColor: colors.surface,
             borderColor: imported ? `${sourceColor}40` : colors.border,
-            opacity: pressed ? 0.72 : 1,
+            transform: [{ scale: pressed ? 0.98 : 1 }],
+            opacity: pressed ? 0.85 : 1,
           },
         ]}
       >

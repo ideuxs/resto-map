@@ -17,6 +17,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
+import * as Haptics from 'expo-haptics';
 import {
   Check,
   Filter,
@@ -188,7 +189,10 @@ export default function RestaurantListScreen({ navigation }: Props) {
           return (
             <Pressable
               key={value}
-              onPress={() => setSource(value)}
+              onPress={() => {
+                Haptics.selectionAsync().catch(() => undefined);
+                setSource(value);
+              }}
               accessibilityRole="tab"
               accessibilityState={{ selected }}
               style={({ pressed }) => [
@@ -202,7 +206,10 @@ export default function RestaurantListScreen({ navigation }: Props) {
                     borderWidth: 1,
                   },
                 ],
-                { opacity: pressed ? 0.7 : 1 },
+                {
+                  transform: [{ scale: pressed ? 0.96 : 1 }],
+                  opacity: pressed ? 0.8 : 1,
+                },
               ]}
             >
               <Text
@@ -227,7 +234,10 @@ export default function RestaurantListScreen({ navigation }: Props) {
         </Text>
         <View style={[styles.inlineActions, compactControls && styles.inlineActionsCompact]}>
           <Pressable
-            onPress={openRandom}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => undefined);
+              openRandom();
+            }}
             disabled={!filtered.length}
             style={({ pressed }) => [
               styles.textAction,
@@ -235,7 +245,8 @@ export default function RestaurantListScreen({ navigation }: Props) {
               {
                 backgroundColor: colors.surface,
                 borderColor: colors.border,
-                opacity: !filtered.length ? 0.35 : pressed ? 0.65 : 1,
+                transform: [{ scale: pressed ? 0.95 : 1 }],
+                opacity: !filtered.length ? 0.35 : pressed ? 0.75 : 1,
               },
             ]}
           >
@@ -243,19 +254,23 @@ export default function RestaurantListScreen({ navigation }: Props) {
             <Text style={[styles.textActionLabel, { color: colors.primary }]}>Choisir</Text>
           </Pressable>
           <Pressable
-            onPress={() => setFiltersOpen(true)}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
+              setFiltersOpen(true);
+            }}
             style={({ pressed }) => [
               styles.textAction,
               Shadows.hairline,
               {
-                backgroundColor: advancedCount ? (isDark ? colors.surfaceAubergine : colors.surfaceLight) : colors.surface,
+                backgroundColor: advancedCount ? (isDark ? colors.surfaceAubergine : `${colors.primary}18`) : colors.surface,
                 borderColor: advancedCount ? colors.primary : colors.border,
-                opacity: pressed ? 0.65 : 1,
+                transform: [{ scale: pressed ? 0.95 : 1 }],
+                opacity: pressed ? 0.75 : 1,
               },
             ]}
           >
-            {advancedCount ? <Filter size={15} color={colors.primary} /> : <SlidersHorizontal size={15} color={colors.textSecondary} />}
-            <Text style={[styles.textActionLabel, { color: advancedCount ? colors.primary : colors.textSecondary }]}>
+            {advancedCount ? <Filter size={15} color={colors.primary} /> : <SlidersHorizontal size={15} color={colors.primary} />}
+            <Text style={[styles.textActionLabel, { color: colors.primary }]}>
               Filtres{advancedCount ? ` · ${advancedCount}` : ''}
             </Text>
           </Pressable>
@@ -354,7 +369,10 @@ export default function RestaurantListScreen({ navigation }: Props) {
   function Option({ label, selected, onPress }: { label: string; selected: boolean; onPress: () => void }) {
     return (
       <Pressable
-        onPress={onPress}
+        onPress={() => {
+          Haptics.selectionAsync().catch(() => undefined);
+          onPress();
+        }}
         accessibilityRole="checkbox"
         accessibilityState={{ checked: selected }}
         style={({ pressed }) => [
@@ -362,7 +380,8 @@ export default function RestaurantListScreen({ navigation }: Props) {
           {
             backgroundColor: selected ? (isDark ? colors.surfaceAubergine : `${colors.primary}18`) : (isDark ? colors.surfaceLight : colors.background),
             borderColor: selected ? colors.primary : colors.border,
-            opacity: pressed ? 0.68 : 1,
+            transform: [{ scale: pressed ? 0.95 : 1 }],
+            opacity: pressed ? 0.78 : 1,
           },
         ]}
       >

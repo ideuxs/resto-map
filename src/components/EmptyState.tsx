@@ -1,5 +1,6 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import * as Haptics from 'expo-haptics';
 import { FlaticonIcon } from './FlaticonIcon';
 import { useTheme } from '../theme/ThemeProvider';
 import { BorderRadius, FontFamily, FontSize, Shadows, Spacing } from '../constants/theme';
@@ -24,13 +25,17 @@ export default function EmptyState({ icon: Icon, title, subtitle, actionLabel, o
       {actionLabel && onAction ? (
         <Pressable
           accessibilityRole="button"
-          onPress={onAction}
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
+            onAction();
+          }}
           style={({ pressed }) => [
             styles.action,
             Shadows.card,
             {
               backgroundColor: colors.primary,
-              opacity: pressed ? 0.78 : 1,
+              transform: [{ scale: pressed ? 0.96 : 1 }],
+              opacity: pressed ? 0.85 : 1,
             },
           ]}
         >

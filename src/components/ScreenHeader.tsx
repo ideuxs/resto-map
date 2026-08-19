@@ -7,6 +7,7 @@ import {
   View,
   ViewStyle,
 } from 'react-native';
+import * as Haptics from 'expo-haptics';
 import { Plus } from './FlaticonIcon';
 
 import { BorderRadius, FontFamily, FontSize, Shadows, Spacing } from '../constants/theme';
@@ -43,7 +44,10 @@ export default function ScreenHeader({
         </Text>
         {displaysAdd ? (
           <Pressable
-            onPress={onAdd}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
+              onAdd?.();
+            }}
             accessibilityRole="button"
             accessibilityLabel={addAccessibilityLabel}
             hitSlop={4}
@@ -54,7 +58,8 @@ export default function ScreenHeader({
                 backgroundColor: isDark ? '#4A154B' : colors.primary,
                 borderColor: isDark ? '#6B2370' : 'transparent',
                 borderWidth: isDark ? 1 : 0,
-                opacity: pressed ? 0.8 : 1,
+                transform: [{ scale: pressed ? 0.92 : 1 }],
+                opacity: pressed ? 0.85 : 1,
               },
             ]}
           >

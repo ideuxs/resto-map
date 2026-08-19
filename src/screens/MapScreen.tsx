@@ -4,6 +4,7 @@ import MapView, { Marker, Polyline, PROVIDER_DEFAULT } from 'react-native-maps';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
+import * as Haptics from 'expo-haptics';
 import { CarFront, LocateFixed, MapPinned, Navigation2, UsersRound, X } from '../components/FlaticonIcon';
 import * as Location from 'expo-location';
 
@@ -245,8 +246,17 @@ export default function MapScreen() {
           <View style={styles.miniActions}>
             <Text style={[styles.miniRouteHint, { color: colors.textMuted }]}>{userLocation ? 'Tracé affiché sur la carte' : 'Autorisez la position pour afficher le tracé'}</Text>
             <Pressable
-              onPress={() => navigation.navigate('restaurants', { screen: 'RestaurantDetail', params: { restaurantId: selectedRestaurant.id } })}
-              style={({ pressed }) => [styles.miniOpen, { opacity: pressed ? 0.65 : 1 }]}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
+                navigation.navigate('restaurants', { screen: 'RestaurantDetail', params: { restaurantId: selectedRestaurant.id } });
+              }}
+              style={({ pressed }) => [
+                styles.miniOpen,
+                {
+                  transform: [{ scale: pressed ? 0.96 : 1 }],
+                  opacity: pressed ? 0.75 : 1,
+                },
+              ]}
             >
               <Text style={[styles.miniOpenText, { color: colors.link }]}>Ouvrir la fiche</Text>
               <Navigation2 size={14} color={colors.link} />
@@ -271,7 +281,10 @@ export default function MapScreen() {
             return (
               <Pressable
                 key={value}
-                onPress={() => setSource(value)}
+                onPress={() => {
+                  Haptics.selectionAsync().catch(() => undefined);
+                  setSource(value);
+                }}
                 accessibilityRole="tab"
                 accessibilityState={{ selected }}
                 style={({ pressed }) => [
@@ -284,7 +297,10 @@ export default function MapScreen() {
                       borderWidth: 1,
                     },
                   ],
-                  { opacity: pressed ? 0.7 : 1 },
+                  {
+                    transform: [{ scale: pressed ? 0.96 : 1 }],
+                    opacity: pressed ? 0.75 : 1,
+                  },
                 ]}
               >
                 <Text style={[styles.sourceTabText, { color: selected ? colors.primary : colors.textMuted, fontFamily: selected ? FontFamily.bold : FontFamily.medium }]}>{label}</Text>
@@ -303,7 +319,10 @@ export default function MapScreen() {
       ) : null}
 
       <Pressable
-        onPress={recenter}
+        onPress={() => {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => undefined);
+          recenter();
+        }}
         accessibilityRole="button"
         accessibilityLabel="Me localiser"
         style={({ pressed }) => [
@@ -313,7 +332,8 @@ export default function MapScreen() {
             bottom: insets.bottom + (selectedRestaurant ? (miniCardHeight ? miniCardHeight + 74 + Spacing.md : 280) : 76),
             backgroundColor: colors.glass,
             borderColor: colors.border,
-            opacity: pressed ? 0.72 : 1,
+            transform: [{ scale: pressed ? 0.92 : 1 }],
+            opacity: pressed ? 0.8 : 1,
           },
         ]}
       >

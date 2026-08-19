@@ -13,6 +13,7 @@ import {
 import { Image } from 'expo-image';
 import MapView, { Marker } from 'react-native-maps';
 import * as Linking from 'expo-linking';
+import * as Haptics from 'expo-haptics';
 import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
@@ -303,7 +304,10 @@ export default function RestaurantDetailScreen({ route, navigation }: Props) {
 
           <View style={styles.actionRow}>
             <Pressable
-              onPress={openDirections}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
+                openDirections();
+              }}
               disabled={!restaurant.location}
               style={({ pressed }) => [
                 styles.routeAction,
@@ -312,7 +316,8 @@ export default function RestaurantDetailScreen({ route, navigation }: Props) {
                   backgroundColor: isDark ? '#4A154B' : colors.primary,
                   borderColor: isDark ? '#6B2370' : 'transparent',
                   borderWidth: isDark ? 1 : 0,
-                  opacity: !restaurant.location ? 0.4 : pressed ? 0.78 : 1,
+                  transform: [{ scale: pressed ? 0.96 : 1 }],
+                  opacity: !restaurant.location ? 0.4 : pressed ? 0.85 : 1,
                 },
               ]}
             >
@@ -321,14 +326,18 @@ export default function RestaurantDetailScreen({ route, navigation }: Props) {
             </Pressable>
             {!imported ? (
               <Pressable
-                onPress={() => setListModalOpen(true)}
+                onPress={() => {
+                  Haptics.selectionAsync().catch(() => undefined);
+                  setListModalOpen(true);
+                }}
                 style={({ pressed }) => [
                   styles.secondaryAction,
                   Shadows.hairline,
                   {
                     backgroundColor: colors.surface,
                     borderColor: colors.border,
-                    opacity: pressed ? 0.65 : 1,
+                    transform: [{ scale: pressed ? 0.96 : 1 }],
+                    opacity: pressed ? 0.75 : 1,
                   },
                 ]}
               >
@@ -420,14 +429,18 @@ export default function RestaurantDetailScreen({ route, navigation }: Props) {
                 </View>
               </View>
               <Pressable
-                onPress={openNewVisit}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
+                  openNewVisit();
+                }}
                 accessibilityRole="button"
                 style={({ pressed }) => [
                   styles.addVisitButton,
                   Shadows.hairline,
                   {
                     backgroundColor: colors.primary,
-                    opacity: pressed ? 0.78 : 1,
+                    transform: [{ scale: pressed ? 0.96 : 1 }],
+                    opacity: pressed ? 0.85 : 1,
                   },
                 ]}
               >

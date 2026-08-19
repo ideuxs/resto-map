@@ -1,5 +1,6 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import * as Haptics from 'expo-haptics';
 import { Image } from 'expo-image';
 import { MapPin, Navigation2, Sparkles, Star, UsersRound } from './FlaticonIcon';
 
@@ -48,7 +49,10 @@ export default function RestaurantCard({
 
   return (
     <Pressable
-      onPress={onPress}
+      onPress={() => {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
+        onPress();
+      }}
       accessibilityRole="button"
       accessibilityLabel={`Ouvrir ${restaurant.name}`}
       style={({ pressed }) => [
@@ -59,7 +63,8 @@ export default function RestaurantCard({
         {
           backgroundColor: colors.surface,
           borderColor: colors.border,
-          opacity: pressed ? 0.75 : 1,
+          transform: [{ scale: pressed ? 0.985 : 1 }],
+          opacity: pressed ? 0.88 : 1,
         },
       ]}
     >

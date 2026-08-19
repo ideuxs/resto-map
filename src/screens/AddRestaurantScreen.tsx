@@ -26,6 +26,7 @@ import {
 } from '../components/FlaticonIcon';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
+import * as Haptics from 'expo-haptics';
 import { v4 as uuidv4 } from 'uuid';
 
 import { PriceBand, Restaurant, RestaurantCategory, RestaurantsStackParamList } from '../types';
@@ -68,6 +69,7 @@ export default function AddRestaurantScreen({ route, navigation }: Props) {
   const continueToDetails = async () => {
     setNameTouched(true);
     if (!name.trim()) return;
+    Haptics.selectionAsync().catch(() => undefined);
     if (address.trim() && !coordinates) {
       setLocationLoading(true);
       try {
@@ -148,6 +150,7 @@ export default function AddRestaurantScreen({ route, navigation }: Props) {
       };
       const savedPlaceId = await saveRestaurant(restaurant);
       if (initialCollectionId) await addRestaurantToCollection(initialCollectionId, savedPlaceId);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => undefined);
       navigation.goBack();
     } catch {
       Alert.alert('Enregistrement impossible', 'Vérifiez les informations puis réessayez.');
@@ -220,7 +223,10 @@ export default function AddRestaurantScreen({ route, navigation }: Props) {
                 return (
                   <Pressable
                     key={item.value}
-                    onPress={() => setCategory(item.value)}
+                    onPress={() => {
+                      Haptics.selectionAsync().catch(() => undefined);
+                      setCategory(item.value);
+                    }}
                     accessibilityRole="radio"
                     accessibilityState={{ selected }}
                     style={({ pressed }) => [
@@ -229,7 +235,8 @@ export default function AddRestaurantScreen({ route, navigation }: Props) {
                       {
                         backgroundColor: selected ? (isDark ? colors.surfaceAubergine : `${item.color}15`) : colors.surface,
                         borderColor: selected ? item.color : colors.border,
-                        opacity: pressed ? 0.65 : 1,
+                        transform: [{ scale: pressed ? 0.95 : 1 }],
+                        opacity: pressed ? 0.75 : 1,
                       },
                     ]}
                   >
@@ -298,14 +305,18 @@ export default function AddRestaurantScreen({ route, navigation }: Props) {
                 return (
                   <Pressable
                     key={band.id}
-                    onPress={() => setPriceBand(selected ? null : band.id)}
+                    onPress={() => {
+                      Haptics.selectionAsync().catch(() => undefined);
+                      setPriceBand(selected ? null : band.id);
+                    }}
                     style={({ pressed }) => [
                       styles.priceOption,
                       Shadows.hairline,
                       {
                         backgroundColor: selected ? (isDark ? colors.surfaceAubergine : `${colors.primary}12`) : colors.surface,
                         borderColor: selected ? colors.primary : colors.border,
-                        opacity: pressed ? 0.65 : 1,
+                        transform: [{ scale: pressed ? 0.95 : 1 }],
+                        opacity: pressed ? 0.75 : 1,
                       },
                     ]}
                   >
@@ -411,7 +422,8 @@ export default function AddRestaurantScreen({ route, navigation }: Props) {
               Shadows.card,
               {
                 backgroundColor: colors.primary,
-                opacity: (step === 1 && !name.trim()) || saving || locationLoading ? 0.42 : pressed ? 0.78 : 1,
+                transform: [{ scale: pressed ? 0.97 : 1 }],
+                opacity: (step === 1 && !name.trim()) || saving || locationLoading ? 0.42 : pressed ? 0.85 : 1,
               },
             ]}
           >

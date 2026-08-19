@@ -17,6 +17,7 @@ import {
 import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import * as Haptics from 'expo-haptics';
 import {
   ArrowLeft,
   Eye,
@@ -158,12 +159,27 @@ export default function CollectionDetailScreen({ route, navigation }: Props) {
   return (
     <View style={[styles.screen, { backgroundColor: colors.background }]}>
       <View style={[styles.topBar, { paddingTop: insets.top, backgroundColor: colors.background }]}>
-        <Pressable onPress={() => navigation.goBack()} accessibilityLabel="Retour" style={styles.topAction}>
+        <Pressable
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
+            navigation.goBack();
+          }}
+          accessibilityLabel="Retour"
+          style={({ pressed }) => [styles.topAction, { transform: [{ scale: pressed ? 0.92 : 1 }] }]}
+        >
           <ArrowLeft size={22} color={colors.textPrimary} />
         </Pressable>
         <Text style={[styles.topTitle, { color: colors.textPrimary }]} numberOfLines={1}>{collection.name}</Text>
         {!imported ? (
-          <Pressable onPress={openShareModal} accessibilityRole="button" accessibilityLabel="Partager la liste" style={styles.topAction}>
+          <Pressable
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
+              openShareModal();
+            }}
+            accessibilityRole="button"
+            accessibilityLabel="Partager la liste"
+            style={({ pressed }) => [styles.topAction, { transform: [{ scale: pressed ? 0.92 : 1 }] }]}
+          >
             <Share2 size={20} color={colors.textPrimary} />
           </Pressable>
         ) : <View style={styles.topAction} />}
@@ -198,7 +214,10 @@ export default function CollectionDetailScreen({ route, navigation }: Props) {
 
             {imported ? (
               <Pressable
-                onPress={() => setCollectionVisibility(collection.id, collection.isVisible === false)}
+                onPress={() => {
+                  Haptics.selectionAsync().catch(() => undefined);
+                  setCollectionVisibility(collection.id, collection.isVisible === false);
+                }}
                 accessibilityRole="switch"
                 accessibilityState={{ checked: collection.isVisible !== false }}
                 style={({ pressed }) => [
@@ -207,7 +226,8 @@ export default function CollectionDetailScreen({ route, navigation }: Props) {
                   {
                     backgroundColor: isDark ? colors.surfaceLight : colors.background,
                     borderColor: colors.border,
-                    opacity: pressed ? 0.65 : 1,
+                    transform: [{ scale: pressed ? 0.98 : 1 }],
+                    opacity: pressed ? 0.75 : 1,
                   },
                 ]}
               >
@@ -221,11 +241,18 @@ export default function CollectionDetailScreen({ route, navigation }: Props) {
               </Pressable>
             ) : (
               <Pressable
-                onPress={() => navigation.navigate('AddRestaurant', { collectionId: collection.id })}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
+                  navigation.navigate('AddRestaurant', { collectionId: collection.id });
+                }}
                 style={({ pressed }) => [
                   styles.addAddress,
                   Shadows.card,
-                  { backgroundColor: colors.primary, opacity: pressed ? 0.78 : 1 },
+                  {
+                    backgroundColor: colors.primary,
+                    transform: [{ scale: pressed ? 0.96 : 1 }],
+                    opacity: pressed ? 0.85 : 1,
+                  },
                 ]}
               >
                 <Plus size={16} color={colors.textOnPrimary} />
@@ -236,11 +263,19 @@ export default function CollectionDetailScreen({ route, navigation }: Props) {
             <View style={styles.collectionActions}>
               {!imported ? (
                 <Pressable
-                  onPress={() => setEditOpen(true)}
+                  onPress={() => {
+                    Haptics.selectionAsync().catch(() => undefined);
+                    setEditOpen(true);
+                  }}
                   accessibilityRole="button"
                   style={({ pressed }) => [
                     styles.collectionAction,
-                    { borderColor: colors.border, backgroundColor: isDark ? colors.surfaceLight : colors.background, opacity: pressed ? 0.65 : 1 },
+                    {
+                      borderColor: colors.border,
+                      backgroundColor: isDark ? colors.surfaceLight : colors.background,
+                      transform: [{ scale: pressed ? 0.96 : 1 }],
+                      opacity: pressed ? 0.75 : 1,
+                    },
                   ]}
                 >
                   <Pencil size={16} color={colors.textSecondary} />
@@ -248,12 +283,20 @@ export default function CollectionDetailScreen({ route, navigation }: Props) {
                 </Pressable>
               ) : null}
               <Pressable
-                onPress={removeCollection}
+                onPress={() => {
+                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => undefined);
+                  removeCollection();
+                }}
                 accessibilityRole="button"
                 style={({ pressed }) => [
                   styles.collectionAction,
                   styles.collectionDeleteAction,
-                  { borderColor: `${colors.danger}40`, backgroundColor: `${colors.danger}10`, opacity: pressed ? 0.65 : 1 },
+                  {
+                    borderColor: `${colors.danger}40`,
+                    backgroundColor: `${colors.danger}10`,
+                    transform: [{ scale: pressed ? 0.96 : 1 }],
+                    opacity: pressed ? 0.75 : 1,
+                  },
                 ]}
               >
                 <Trash2 size={16} color={colors.danger} />

@@ -1,6 +1,7 @@
 import React from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import * as Haptics from 'expo-haptics';
 import {
   Check,
   LockKeyhole,
@@ -44,10 +45,19 @@ export default function SettingsScreen() {
           return (
             <React.Fragment key={option.value}>
               <Pressable
-                onPress={() => setTheme(option.value)}
+                onPress={() => {
+                  Haptics.selectionAsync().catch(() => undefined);
+                  setTheme(option.value);
+                }}
                 accessibilityRole="radio"
                 accessibilityState={{ selected }}
-                style={({ pressed }) => [styles.option, { opacity: pressed ? 0.65 : 1 }]}
+                style={({ pressed }) => [
+                  styles.option,
+                  {
+                    transform: [{ scale: pressed ? 0.985 : 1 }],
+                    opacity: pressed ? 0.75 : 1,
+                  },
+                ]}
               >
                 <View style={[styles.optionIcon, { backgroundColor: selected ? (isDark ? colors.surfaceAubergine : `${colors.primary}15`) : (isDark ? colors.surfaceLight : colors.surfaceLight) }]}>
                   <Icon size={18} color={selected ? colors.primary : colors.textMuted} />
