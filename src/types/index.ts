@@ -147,6 +147,7 @@ export interface Restaurant {
   location?: Location;
   origin?: RestaurantOrigin;
   sources?: RestaurantOrigin[];
+  inWishlist?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -177,7 +178,7 @@ export interface Collection {
 
 export type RestaurantsStackParamList = {
   Home: undefined;
-  AddRestaurant: { restaurant?: Restaurant; collectionId?: string } | undefined;
+  AddRestaurant: { restaurant?: Restaurant; collectionId?: string; defaultWishlist?: boolean } | undefined;
   RestaurantDetail: { restaurantId: string };
 };
 
@@ -186,12 +187,19 @@ export type CollectionsStackParamList = {
   DuplicateReview: undefined;
   CollectionDetail: { collectionId: string };
   RestaurantDetail: { restaurantId: string };
-  AddRestaurant: { restaurant?: Restaurant; collectionId?: string } | undefined;
+  AddRestaurant: { restaurant?: Restaurant; collectionId?: string; defaultWishlist?: boolean } | undefined;
+};
+
+export type WishlistStackParamList = {
+  WishlistHome: undefined;
+  RestaurantDetail: { restaurantId: string };
+  AddRestaurant: { restaurant?: Restaurant; collectionId?: string; defaultWishlist?: boolean } | undefined;
 };
 
 export type RootTabParamList = {
   restaurants: NavigatorScreenParams<RestaurantsStackParamList> | undefined;
   map: undefined;
+  wishlist: NavigatorScreenParams<WishlistStackParamList> | undefined;
   collections: NavigatorScreenParams<CollectionsStackParamList> | undefined;
   settings: undefined;
 };

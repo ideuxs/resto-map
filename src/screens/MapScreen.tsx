@@ -5,11 +5,11 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
-import { CarFront, LocateFixed, MapPinned, Navigation2, UsersRound, X } from '../components/FlaticonIcon';
+import { Bookmark, CarFront, LocateFixed, MapPinned, Navigation2, UsersRound, X } from '../components/FlaticonIcon';
 import * as Location from 'expo-location';
 
 import { Restaurant } from '../types';
-import { addCollectionsChangeListener, addRestaurantsChangeListener, getVisibleRestaurants } from '../storage/storage';
+import { addCollectionsChangeListener, addRestaurantsChangeListener, addWishlistChangeListener, getVisibleRestaurants, isWishlisted, toggleWishlist } from '../storage/storage';
 import { CATEGORIES } from '../constants/categories';
 import { useTheme } from '../theme/ThemeProvider';
 import { BorderRadius, FontFamily, FontSize, getSourceColor, isSourceColorKey, Shadows, sourceColorKeyFor, Spacing } from '../constants/theme';
@@ -40,6 +40,7 @@ export default function MapScreen() {
   const [source, setSource] = useState<SourceFilter>('all');
   const [userLocation, setUserLocation] = useState<Location.LocationObjectCoords | null>(null);
   const [selectedRestaurant, setSelectedRestaurant] = useState<Restaurant | null>(null);
+  const [selectedWishlisted, setSelectedWishlisted] = useState(false);
   const [travel, setTravel] = useState<TravelTimes | null>(null);
   const [travelLoading, setTravelLoading] = useState(false);
   const [miniCardHeight, setMiniCardHeight] = useState(0);
@@ -51,6 +52,21 @@ export default function MapScreen() {
     const offCollections = addCollectionsChangeListener(load);
     return () => { offRestaurants(); offCollections(); };
   }, [load]);
+
+  useEffect(() => {
+    if (selectedRestaurant?.id) {
+      isWishlisted(selectedRestaurant.id).then(setSelectedWishlisted);
+    }
+  }, [selectedRestaurant?.id]);
+
+  useEffect(() => {
+    const offWishlist = addWishlistChangeListener(() => {
+      if (selectedRestaurant?.id) {
+        isWishlisted(selectedRestaurant.id).then(setSelectedWishlisted);
+      }
+    });
+    return () => offWishlist();
+  }, [selectedRestaurant?.id]);
 
   useEffect(() => {
     let active = true;
@@ -226,6 +242,30 @@ export default function MapScreen() {
               <Text style={[styles.miniName, { color: colors.textPrimary }]} numberOfLines={1}>{selectedRestaurant.name}</Text>
               <Text style={[styles.miniCategory, { color: colors.textSecondary }]} numberOfLines={1}>{selectedCategory.label}{selectedRestaurant.address ? ` · ${selectedRestaurant.address}` : ''}</Text>
             </View>
+            <Pressable
+              onPress={async () => {
+                if (!selectedRestaurant) return;
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
+                const next = !selectedWishlisted;
+                setSelectedWishlisted(next);
+                await toggleWishlist(selectedRestaurant.id);
+              }}
+              style={({ pressed }) => [
+                styles.miniWishlistBtn,
+                {
+                  transform: [{ scale: pressed ? 0.85 : 1 }],
+                  opacity: pressed ? 0.7 : 1,
+                },
+              ]}
+              accessibilityLabel={selectedWishlisted ? "Retirer des envies" : "Ajouter aux envies"}
+            >
+              <Bookmark
+                size={18}
+                fill={selectedWishlisted ? (isDark ? '#A84BAE' : colors.primary) : 'none'}
+                color={selectedWishlisted ? (isDark ? '#A84BAE' : colors.primary) : colors.textMuted}
+                strokeWidth={selectedWishlisted ? 2.6 : 1.8}
+              />
+            </Pressable>
             <Pressable onPress={() => { setSelectedRestaurant(null); setTravel(null); }} style={styles.miniClose} accessibilityLabel="Fermer la mini-fiche">
               <X size={18} color={colors.textMuted} />
             </Pressable>
@@ -364,6 +404,7 @@ const styles = StyleSheet.create({
   miniCopy: { flex: 1, minWidth: 0 },
   miniName: { fontFamily: FontFamily.bold, fontSize: FontSize.md, letterSpacing: -0.2 },
   miniCategory: { marginTop: 1, fontFamily: FontFamily.regular, fontSize: FontSize.xs },
+  miniWishlistBtn: { width: 34, height: 34, alignItems: 'center', justifyContent: 'center' },
   miniClose: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
   routeSummary: { minHeight: 46, marginTop: Spacing.md, paddingVertical: Spacing.xs, flexDirection: 'row', alignItems: 'center', borderRadius: BorderRadius.md },
   routeSummaryItem: { flex: 1, minWidth: 0, paddingHorizontal: Spacing.sm, flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', columnGap: 4 },

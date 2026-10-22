@@ -31,13 +31,17 @@ export default function TabsLayout() {
         <Icon src={<VectorIcon family={flaticonVectorFamily} name="map" />} />
         <Label>Carte</Label>
       </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="wishlist">
+        <Icon src={<VectorIcon family={flaticonVectorFamily} name="bookmark" />} />
+        <Label>Envies</Label>
+      </NativeTabs.Trigger>
       <NativeTabs.Trigger name="collections">
         <Icon src={<VectorIcon family={flaticonVectorFamily} name="book-bookmark" />} />
         <Label>Listes</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="settings">
         <Icon src={<VectorIcon family={flaticonVectorFamily} name="settings-sliders" />} />
-        <Label>Paramètres</Label>
+        <Label>Réglages</Label>
       </NativeTabs.Trigger>
     </NativeTabs>
   );

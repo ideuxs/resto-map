@@ -18,6 +18,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   ArrowLeft,
   ArrowRight,
+  Bookmark,
   Camera,
   Check,
   LocateFixed,
@@ -30,7 +31,7 @@ import * as Haptics from 'expo-haptics';
 import { v4 as uuidv4 } from 'uuid';
 
 import { PriceBand, Restaurant, RestaurantCategory, RestaurantsStackParamList } from '../types';
-import { addRestaurantToCollection, saveRestaurant } from '../storage/storage';
+import { addRestaurantToCollection, saveRestaurant, setWishlistStatus } from '../storage/storage';
 import { saveImageLocally } from '../storage/imageStorage';
 import { geoFromAddress } from '../../services/geocode';
 import { CATEGORY_LIST } from '../constants/categories';
@@ -55,6 +56,7 @@ export default function AddRestaurantScreen({ route, navigation }: Props) {
   const [description, setDescription] = useState(editing?.description || '');
   const [tagsText, setTagsText] = useState((editing?.tags || []).join(', '));
   const [images, setImages] = useState<string[]>(editing?.images || []);
+  const [addToWishlist, setAddToWishlist] = useState(Boolean(route.params?.defaultWishlist));
   const [nameTouched, setNameTouched] = useState(false);
   const [locationLoading, setLocationLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -150,6 +152,7 @@ export default function AddRestaurantScreen({ route, navigation }: Props) {
       };
       const savedPlaceId = await saveRestaurant(restaurant);
       if (initialCollectionId) await addRestaurantToCollection(initialCollectionId, savedPlaceId);
+      if (addToWishlist) await setWishlistStatus(savedPlaceId, true);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => undefined);
       navigation.goBack();
     } catch {
@@ -410,6 +413,57 @@ export default function AddRestaurantScreen({ route, navigation }: Props) {
               style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.textPrimary }]}
             />
             <Text style={[styles.helper, { color: colors.textMuted, marginTop: 4 }]}>Séparez les tags par une virgule.</Text>
+
+            <Pressable
+              onPress={() => {
+                Haptics.selectionAsync().catch(() => undefined);
+                setAddToWishlist((prev) => !prev);
+              }}
+              style={({ pressed }) => [
+                styles.wishlistToggleCard,
+                Shadows.hairline,
+                {
+                  backgroundColor: addToWishlist
+                    ? (isDark ? 'rgba(217, 189, 222, 0.16)' : 'rgba(74, 21, 75, 0.08)')
+                    : colors.surface,
+                  borderColor: addToWishlist
+                    ? (isDark ? colors.lavender : colors.primary)
+                    : colors.border,
+                  transform: [{ scale: pressed ? 0.98 : 1 }],
+                },
+              ]}
+            >
+              <View style={styles.wishlistToggleContent}>
+                <Bookmark
+                  size={20}
+                  color={addToWishlist ? (isDark ? colors.lavender : colors.primary) : colors.textMuted}
+                  strokeWidth={addToWishlist ? 2.6 : 1.8}
+                />
+                <View style={styles.wishlistToggleText}>
+                  <Text style={[styles.wishlistToggleTitle, { color: colors.textPrimary }]}>
+                    Ajouter à mes envies (Wishlist)
+                  </Text>
+                  <Text style={[styles.wishlistToggleSubtitle, { color: colors.textMuted }]}>
+                    Retrouvez cette adresse dans l’onglet Envies pour la tester plus tard
+                  </Text>
+                </View>
+              </View>
+              <View
+                style={[
+                  styles.wishlistToggleCheck,
+                  {
+                    backgroundColor: addToWishlist
+                      ? (isDark ? colors.lavender : colors.primary)
+                      : 'transparent',
+                    borderColor: addToWishlist
+                      ? (isDark ? colors.lavender : colors.primary)
+                      : colors.border,
+                  },
+                ]}
+              >
+                {addToWishlist ? <Check size={13} color={colors.textOnPrimary} strokeWidth={2.8} /> : null}
+              </View>
+            </Pressable>
           </>
         )}
 
@@ -502,4 +556,41 @@ const styles = StyleSheet.create({
   bottomBar: { marginTop: Spacing.xxl, marginBottom: Spacing.lg },
   primaryButton: { minHeight: 50, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Spacing.sm, borderRadius: BorderRadius.button },
   primaryButtonText: { fontFamily: FontFamily.bold, fontSize: FontSize.md, letterSpacing: 0.1 },
+  wishlistToggleCard: {
+    marginTop: Spacing.lg,
+    padding: Spacing.md,
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Spacing.sm,
+  },
+  wishlistToggleContent: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+  },
+  wishlistToggleText: {
+    flex: 1,
+    gap: 2,
+  },
+  wishlistToggleTitle: {
+    fontFamily: FontFamily.semiBold,
+    fontSize: FontSize.sm,
+  },
+  wishlistToggleSubtitle: {
+    fontFamily: FontFamily.regular,
+    fontSize: FontSize.xs,
+    lineHeight: 16,
+  },
+  wishlistToggleCheck: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 });

@@ -29,6 +29,7 @@ const LEGACY_RESTAURANTS_KEY = '@restohub_restaurants';
 const LEGACY_COLLECTIONS_KEY = '@restohub_collections';
 const CATALOG_KEY = '@restohub_catalog_v1';
 const SHARE_OWNER_KEY = '@restohub_share_owner_v1';
+const WISHLIST_KEY = '@restohub_wishlist_v1';
 
 type CatalogCollection = Omit<Collection, 'restaurantIds'>;
 
@@ -77,12 +78,14 @@ interface NormalizedShare {
 const restaurantChangeListeners = new Set<() => void>();
 const collectionChangeListeners = new Set<() => void>();
 const visitChangeListeners = new Set<() => void>();
+const wishlistChangeListeners = new Set<() => void>();
 let migrationPromise: Promise<CatalogSnapshot> | null = null;
 let mutationQueue: Promise<unknown> = Promise.resolve();
 
 function emitRestaurantsChanged() { restaurantChangeListeners.forEach((listener) => listener()); }
 function emitCollectionsChanged() { collectionChangeListeners.forEach((listener) => listener()); }
 function emitVisitsChanged() { visitChangeListeners.forEach((listener) => listener()); }
+function emitWishlistChanged() { wishlistChangeListeners.forEach((listener) => listener()); }
 
 export function addRestaurantsChangeListener(listener: () => void) {
   restaurantChangeListeners.add(listener);
@@ -97,6 +100,11 @@ export function addCollectionsChangeListener(listener: () => void) {
 export function addVisitsChangeListener(listener: () => void) {
   visitChangeListeners.add(listener);
   return () => { visitChangeListeners.delete(listener); };
+}
+
+export function addWishlistChangeListener(listener: () => void) {
+  wishlistChangeListeners.add(listener);
+  return () => { wishlistChangeListeners.delete(listener); };
 }
 
 function hashString(value: string): string {
@@ -849,4 +857,62 @@ export async function setLocalShareOwnerName(displayName: string): Promise<{ id:
   const nextOwner = { ...owner, displayName: normalizedName };
   await AsyncStorage.setItem(SHARE_OWNER_KEY, JSON.stringify(nextOwner));
   return nextOwner;
+}
+
+/* ───────────────────────── Wishlist ───────────────────────── */
+
+export async function getWishlistRestaurantIds(): Promise<string[]> {
+  try {
+    const raw = await AsyncStorage.getItem(WISHLIST_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+export async function isWishlisted(restaurantId: string): Promise<boolean> {
+  if (!restaurantId) return false;
+  const ids = await getWishlistRestaurantIds();
+  return ids.includes(restaurantId);
+}
+
+export async function setWishlistStatus(restaurantId: string, inWishlist: boolean): Promise<void> {
+  if (!restaurantId) return;
+  const current = await getWishlistRestaurantIds();
+  const set = new Set(current);
+  if (inWishlist) {
+    set.add(restaurantId);
+  } else {
+    set.delete(restaurantId);
+  }
+  await AsyncStorage.setItem(WISHLIST_KEY, JSON.stringify(Array.from(set)));
+  emitWishlistChanged();
+}
+
+export async function toggleWishlist(restaurantId: string): Promise<boolean> {
+  if (!restaurantId) return false;
+  const current = await getWishlistRestaurantIds();
+  const set = new Set(current);
+  const next = !set.has(restaurantId);
+  if (next) {
+    set.add(restaurantId);
+  } else {
+    set.delete(restaurantId);
+  }
+  await AsyncStorage.setItem(WISHLIST_KEY, JSON.stringify(Array.from(set)));
+  emitWishlistChanged();
+  return next;
+}
+
+export async function getWishlistRestaurants(): Promise<Restaurant[]> {
+  const [restaurants, wishlistIds] = await Promise.all([
+    getVisibleRestaurants(),
+    getWishlistRestaurantIds(),
+  ]);
+  const wishlistSet = new Set(wishlistIds);
+  return restaurants
+    .filter((r) => wishlistSet.has(r.id) || (r.placeId && wishlistSet.has(r.placeId)))
+    .map((r) => ({ ...r, inWishlist: true }));
 }
